@@ -21,7 +21,16 @@ pub fn main() !void {
         std.debug.print("file is not found", .{});
         return e;
     }; 
+    defer file.close();
+
+    const tokens_file = std.fs.cwd().openFile("data/tokens", .{.mode = .write_only}) catch |e| {
+        std.debug.print("file 'data/tokens' is not found", .{});
+        return e;
+    };
+    defer file.close();
 
     var tokenizer = tk.Tokenizer(12).init(allocator);
-    var tokenizer.tokenize()
+    _ = try tokenizer.tokenize(allocator, file);
+    try tokenizer.writeToFile(tokens_file);
+
 }
