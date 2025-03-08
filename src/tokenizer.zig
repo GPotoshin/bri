@@ -71,7 +71,6 @@ pub fn Tokenizer(comptime dim: u32) type {
                 var slice = trim(@constCast(string[0..]), 0);
                 const key = try allocator.alloc(u8, slice.len);
                 std.mem.copyForwards(u8, key, slice);
-                std.debug.print("reading {any}\n", .{key});
                 var token: Token(dim) = undefined; 
                 slice.ptr = @ptrCast(&token.vect);
                 slice.len = dim*@sizeOf(float_type);
@@ -157,7 +156,6 @@ pub fn Tokenizer(comptime dim: u32) type {
 
                     if (buf.len == 0) {
                         const key = try allocator.alloc(u8, mut_slice.len);
-                        std.debug.print("storing len {}\n", .{key.len}); // @Testing
                         std.mem.copyForwards(u8, key, mut_slice);
                         try self.tokens.put(key, new_token);
                         try list.append(new_token.vect);
@@ -268,7 +266,6 @@ pub fn Tokenizer(comptime dim: u32) type {
             };
             var t_iter = self.tokens.iterator();
             while (t_iter.next()) |el| {
-                std.debug.print("writing '{s}'\n", .{el.key_ptr.*});
                 try writer.writeAll(el.key_ptr.*);
                 try writer.writeByteNTimes(0, max_token_len-el.key_ptr.len);
 
