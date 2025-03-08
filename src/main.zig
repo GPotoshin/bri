@@ -23,14 +23,19 @@ pub fn main() !void {
     }; 
     defer file.close();
 
-    const tokens_file = std.fs.cwd().openFile("data/tokens", .{.mode = .write_only}) catch |e| {
+    const embeding_file = std.fs.cwd().openFile("data/embeding", .{.mode = .read_write}) catch |e| {
         std.debug.print("file 'data/tokens' is not found", .{});
         return e;
     };
-    defer file.close();
+    defer embeding_file.close();
 
-    var tokenizer = tk.Tokenizer(12).init(allocator);
+    var tokenizer = try tk.Tokenizer(12).initFromFile(allocator, embeding_file);
+
+    var iter = tokenizer.tokens.iterator();
+    while (iter.next()) |el| {
+        std.debug.print("key: {s}\n", .{el.key_ptr.*});
+    }
+
     _ = try tokenizer.tokenize(allocator, file);
-    try tokenizer.writeToFile(tokens_file);
-
+    try tokenizer.writeToFile(embeding_file);
 }
