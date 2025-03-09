@@ -114,6 +114,10 @@ pub fn Tokenizer(comptime dim: u32) type {
                 slice[2] <= 'z') {
                 return false;
             }
+            if (slice.len >= 3 and slice[1] == 'V' and 'a' <= slice[2] and
+                slice[2] <= 'z') {
+                return false;
+            }
             return true;
         }
 
