@@ -107,15 +107,41 @@ pub fn Tokenizer(comptime dim: u32) type {
             };
         }
 
+        // This code is highly coupled with the token base and the fact that
+        // all words except proper nouns are read miniscule
+        fn not_exception(slice: []u8) bool {
+            if (slice.len >= 3 and slice[1] == 'I' and 'a' <= slice[2] and
+                slice[2] <= 'z') {
+                return false;
+            }
+            return true;
+        }
+
+        // Tokens are found in lower case if possible
         fn find_prefix_token (self: *Self, slice: []u8) !?struct{ t: Token(dim), l: u32} {
             const stdout = std.io.getStdOut().writer();
             var slice_copy = slice;
-            while (slice_copy.len > 0) {
-                if (self.tokens.get(slice_copy)) |token| {
-                    try stdout.print("{s}|", .{slice_copy});
-                    return .{.t = token, .l = @truncate(slice_copy.len)};
+            if (not_exception(slice)) {
+                while (slice_copy.len > 0) {
+                    if (self.tokens.get(slice_copy)) |token| {
+                        try stdout.print("{s}|", .{slice_copy});
+                        return .{.t = token, .l = @truncate(slice_copy.len)};
+                    }
+                    slice_copy.len -= 1;
                 }
-                slice_copy.len -= 1;
+            }
+            slice_copy = slice;
+            if (slice.len >= 2 and 'A' <= slice[1] and slice[1] <= 'Z') {
+                slice[1] += 32; //'a' - 'A'
+                while (slice_copy.len > 0) {
+                    if (self.tokens.get(slice_copy)) |token| {
+                        try stdout.print("{s}|", .{slice_copy});
+                        return .{.t = token, .l = @truncate(slice_copy.len)};
+                    }
+                    slice_copy.len -= 1;
+                }
+
+                slice[1] -= 32;
             }
             return null;
         }
