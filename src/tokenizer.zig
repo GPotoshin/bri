@@ -243,13 +243,23 @@ pub fn Tokenizer(comptime dim: u32) type {
             }
         }
 
+        fn not_in_list(el: u8, list: []u8) bool {
+            for (list) |a| {
+                if (a == el) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         fn split_and_call(self: *Self, allocator: std.mem.Allocator, buffer: *[128]u8, len: u32,
             list: *std.ArrayList([dim]float_type)) !void {
             var start: u32 = 0;
             var end: u32 = 1;
             while (end+1 < len) {
                 buffer[start] = ' ';
-                while (end+1 < len and buffer[end] != '\n') {
+                var separate = [_]u8{'\n', '"', '\'', '('};
+                while (end+1 < len and not_in_list(buffer[end], separate[0..])) {
                     end += 1;
                 }
                 try self.tokenize_word(allocator, buffer[start..(end+1)], list);
