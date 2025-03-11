@@ -24,10 +24,16 @@ pub fn main() !void {
     defer file.close();
 
     const embeding_file = std.fs.cwd().openFile("data/embeding", .{.mode = .read_write}) catch |e| {
-        std.debug.print("file 'data/tokens' is not found", .{});
+        std.debug.print("file 'data/embeding' is not found\n", .{});
         return e;
     };
     defer embeding_file.close();
+
+    const tokens_file = std.fs.cwd().openFile("data/tokens", .{.mode = .write_only}) catch |e| {
+        std.debug.print("file 'data/tokens' is not found\n", .{});
+        return e;
+    };
+    defer tokens_file.close();
 
     var tokenizer = try tk.Tokenizer(12).initFromFile(allocator, embeding_file);
 
@@ -37,5 +43,5 @@ pub fn main() !void {
     }
 
     _ = try tokenizer.tokenize(allocator, file);
-    try tokenizer.writeToFile(embeding_file);
+    try tokenizer.writeTokens(tokens_file);
 }

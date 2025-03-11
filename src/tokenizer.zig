@@ -17,9 +17,10 @@ pub fn Token(comptime dim: u32) type {
     };
 }
 
-pub fn Tokenizer(comptime dim: u32) type {
+pub fn Tokenizer() type {
     return struct {
-        tokens: std.StringHashMap(Token(dim)),
+        ids: std.StringHashMap(u32),
+        tokens: std.ArrayList([]u8),
         free_id: u32,
 
         const Self = @This();
@@ -44,47 +45,46 @@ pub fn Tokenizer(comptime dim: u32) type {
         }
 
         pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
-            // var buffer: [16]u8 = undefined; // tokens must be no longer then 16 chars
             var reader = file.reader();
             // The file should contain
-            // ($dimension = 4 bytes)
-            // $token_string $x_1 $x_2 ...
+            // $number_of_tokens
+            // $token_string[16 bytes] $token_id[4 bytes]
             // ...
-            var tokens = std.StringHashMap(Token(dim)).init(allocator);
+            var ids = std.StringHashMap(u32).init(allocator); // it's arena
+
             const endPos = try file.getEndPos();
             if (endPos == 0) {
                 std.debug.print("empty file...\n", .{});
                 return .{
-                    .tokens = tokens,
+                    .tokens = std.ArrayList([]u8).init(allocator),
+                    .ids = ids,
                     .free_id = 0,
                 };
             }
 
-            const dimension = try reader.readInt(u32, .little);
-            if (dimension != dim) {
-                std.debug.print("wrong dimension!\n", .{});
-                return ParsingError.DataConflict;
-            }
+            const tokens_stored = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("could not read first 4 bytes from tokens file\n", .{});
+                return e;
+            };
 
-            var id: u32 = 0;
+            var tokens = std.ArrayList([]u8).initCapacity(allocator, tokens_stored);
+            
+            var tokens_read_counter = 0;
+
             while (reader.readBytesNoEof(max_token_len)) |string| {
-                var slice = trim(@constCast(string[0..]), 0);
+                const slice = trim(@constCast(string[0..]), 0);
                 const key = try allocator.alloc(u8, slice.len);
                 std.mem.copyForwards(u8, key, slice);
-                var token: Token(dim) = undefined; 
-                slice.ptr = @ptrCast(&token.vect);
-                slice.len = dim*@sizeOf(float_type);
 
-                if (try reader.readAll(slice) != slice.len) {
-                    std.debug.print("wrong alignement, reader reached the end," ++
-                                    " while vector did not end\n"
-                                    , .{}); 
-                    return ParsingError.WrongAlignement;
-                }
+                const id = reader.readInt(u32, .little) catch |e| {
+                    std.debug.print("Could not read tokens id\n", .{});
+                    return e;
+                };
 
-                token.id = id;
-                id += 1;
-                try tokens.put(key, token);
+                try ids.put(key, id);
+                try tokens.insert(id, key);
+
+                tokens_read_counter += 1;
             } else |e| {
                 if (e == error.EndOfStream)  return .{
                     .tokens = tokens,
@@ -312,6 +312,19 @@ pub fn Tokenizer(comptime dim: u32) type {
                 bytes.len = @sizeOf(@TypeOf(el.value_ptr.vect));
                 bytes.ptr = @ptrCast(&el.value_ptr.vect);
                 try writer.writeAll(bytes);
+            }
+        }
+
+        pub fn writeTokens(self: *Self, file: std.fs.File) !void {
+            try file.seekTo(0);
+
+            const writer = file.writer();
+
+            var t_iter = self.tokens.iterator();
+            while (t_iter.next()) |el| {
+                try writer.writeAll(el.key_ptr.*);
+                try writer.writeByteNTimes(0, max_token_len-el.key_ptr.len);
+                try writer.writeInt(u32, el.value_ptr, .little);
             }
         }
     };
