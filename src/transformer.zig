@@ -54,7 +54,7 @@ pub fn matprint(comptime T: type, mat: Matrix(T)) void {
 
 /// computes `(mat1 x mat2^t)^t` because the second argement is trited as an
 /// array of vectors a and vetors are lines in this library. The reason is
-/// memory locality
+/// memory locality. mat1: MxN, mat2: LxN, out LxM
 pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T)) !void {
     if (mat1.width != mat2.width) {
         std.debug.print("Wrong dimensions in product mat1 and mat2\n", .{});
@@ -83,7 +83,8 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T
     }
 }
 
-// adds to each row of mat the vect
+/// adds to each row of mat the vect
+/// mat: NxM, vec: M
 pub fn addMatVect(comptime T: type, mat: Matrix(T), vec: []T) !void {
     if (mat.width != vec.len) {
         std.debug.print("Incoherent mat and vect sizes!\n", .{});
@@ -98,7 +99,8 @@ pub fn addMatVect(comptime T: type, mat: Matrix(T), vec: []T) !void {
     }
 }
 
-// memory for the output should be preallocated and the sizes should be coherent
+/// memory for the output should be preallocated and the sizes should be coherent
+/// mat: NxM, input: LxM, vect: N, output: LxN
 pub fn affine(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(T),
     vect: []T, output: Matrix(T)}) !void {
     // the sympliest algo
@@ -149,7 +151,15 @@ pub fn Attention(comptime T: type) type {
             return retval;
         }
 
-        pub fn calulate(seq: Matrix(T), context: Matrix(T)) Matrix(T) {
+        pub fn calulate(self: Self, seq: Matrix(T), context: Matrix(T)) Matrix(T) {
+            
+            // This can be parallelized
+            try affine(T, {.mat = self.query_matrix, .input = seq,
+                .vect = self.query_vect, .output = self.query});
+            try affine(T, {.mat = self.key_matrix, .input = context,
+                .vect = self.key_vect, .output = self.key});
+            try affine(T, {.mat = self.value_matrix, .input = context,
+                .vect = self.key_vect, .output = self.key});
 
             return out_value;
         }
