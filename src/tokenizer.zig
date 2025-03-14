@@ -186,6 +186,10 @@ pub fn Tokenizer() type {
             const full_len = mut_slice.len;
             var sum_len: u32 = 0;
 
+            const stdout = std.io.getStdOut().writer();
+            const stdin = std.io.getStdIn().reader();
+
+
             var token_count: u32 = 0;
             while (sum_len < full_len) {
                 if (try self.find_prefix_token(mut_slice)) |token| {
@@ -195,9 +199,6 @@ pub fn Tokenizer() type {
                     mut_slice.ptr += token.l;
                     mut_slice.len -= token.l;
                 } else {
-                    const stdout = std.io.getStdOut().writer();
-                    const stdin = std.io.getStdIn().reader();
-
                     // try stdout.print("Unknown sequence {any}\n", .{mut_slice});
                     try stdout.print("\nEnter new prefix token for '{s}'\n" , .{mut_slice});
                     var input: [128]u8 = undefined;
@@ -302,6 +303,7 @@ pub fn Tokenizer() type {
         // the function takes a file (remplace for a reader?) and outputs a
         // list of token indices. The list is allocated with a given allocator
         pub fn tokenize(self: *Self, allocator: std.mem.Allocator, file: std.fs.File) !std.ArrayList(u32) {
+            const stdout = std.io.getStdOut().writer();
             var reader = file.reader();
             var buffer: [128]u8 = undefined;
             var list = std.ArrayList(u32).init(allocator);
@@ -317,11 +319,13 @@ pub fn Tokenizer() type {
                     self.split_and_call(allocator, &buffer, @truncate(fbs.pos+1), &list) catch |e1| {
                         if (e1 != error.TokenizationAborted) return e1;
                     };
+                    try stdout.print("\n", .{});
                     return list;
                 }
                 std.debug.print("The Word is to long\n", .{});
                 return e;
             }
+            try stdout.print("\n", .{});
             return list;
         }
 
