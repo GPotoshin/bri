@@ -66,7 +66,7 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T
         return error.IncompatibleObjects; 
     }
 
-    if (out.height != mat2.height) {
+    if (out.height < mat2.height) {
         std.debug.print("Wrong height in out\n", .{});
         return error.IncompatibleObjects; 
     }
@@ -111,6 +111,23 @@ pub fn affine(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(T
     try addMatVect(T, payload.output, payload.vect);
 }
 
+/// funciton overwrites content of mat and does soft max on every row of mat
+pub fn softmax(comptime T: type, mat: Matrix(T)) {
+    for (i..mat.height) |i| {
+        var vect = mat.row(i);
+        var sum: T = 0;
+
+        for (vect) |*v| {
+            v = std.math.exp(v);
+            sum += v;
+        }
+        for (vect) |*v| {
+            v = v/sum;
+        }
+    }
+
+}
+
 pub fn Attention(comptime T: type) type {
     return struct {
         prim_dim: u32,
@@ -136,17 +153,21 @@ pub fn Attention(comptime T: type) type {
 
         const Self = @This();
         pub fn init(allocator: std.mem.Allocator, hyper_param: struct {
-            prim_dim: u32, cont_dim: u32, attn_dim: u32, out_dim: u32}) !Self {
+            prim_dim: u32, ctx_dim: u32, attn_dim: u32, out_dim: u32,
+            seq_len: u32, ctx_len: u32}) !Self {
 
             const retval: Self = undefined;
             retval.query_matrix = try Matrix(T).init(allocator, hyper_param.attn_dim, hyper_param.prim_dim);
             retval.query_vect = try allocator.alloc(T, hyper_param.attn_dim);
+            retval.query = try Matrix(T).init(allocator, hyper_param.seq_len, hyper_param.attn_dim);
             
-            retval.key_matrix = try Matrix(T).init(allocator, hyper_param.attn_dim, hyper_param.cont_dim);
+            retval.key_matrix = try Matrix(T).init(allocator, hyper_param.attn_dim, hyper_param.ctx_dim);
             retval.key_vect = try allocator.alloc(T, hyper_param.attn_dim);
+            retval.key = try Matrix(T).init(allocator, hyper_param.ctx_len, hyper_param.attn_dim);
 
-            retval.value_matrix = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.cont_dim);
+            retval.value_matrix = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.ctx_dim);
             retval.value_vect = try allocator.alloc(T, hyper_param.out_dim);
+            retval.value = try Matrix(T).init(allocator, hyper_param.ctx_len, hyper_param.out_dim);
 
             return retval;
         }
@@ -154,11 +175,11 @@ pub fn Attention(comptime T: type) type {
         pub fn calulate(self: Self, seq: Matrix(T), context: Matrix(T)) Matrix(T) {
             
             // This can be parallelized
-            try affine(T, {.mat = self.query_matrix, .input = seq,
+            try affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = self.query});
-            try affine(T, {.mat = self.key_matrix, .input = context,
+            try affine(T, .{.mat = self.key_matrix, .input = context,
                 .vect = self.key_vect, .output = self.key});
-            try affine(T, {.mat = self.value_matrix, .input = context,
+            try affine(T, .{.mat = self.value_matrix, .input = context,
                 .vect = self.key_vect, .output = self.key});
 
             return out_value;
