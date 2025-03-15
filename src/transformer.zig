@@ -140,6 +140,15 @@ pub fn affine2(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(
     try addMatCol(T, payload.output, payload.vect);
 }
 
+pub fn matscale(comptime T: type, k: T, mat: Matrix(T)) void {
+    for(0..mat.height) |i| {
+        const vec = mat.row(i);
+        for(vec) |*v| {
+            v.* *= k;
+        }
+    }
+}
+
 /// funciton overwrites content of mat and does soft max on every row of mat
 pub fn softmax(comptime T: type, mat: Matrix(T)) void {
     for (0..mat.height) |i| {
@@ -148,8 +157,10 @@ pub fn softmax(comptime T: type, mat: Matrix(T)) void {
 
         for (vect) |*v| {
             v.* = @exp(v.*);
+            // std.debug.print("exp: {}\n", .{v.*});
             sum += v.*;
         }
+        // std.debug.print("sum: {}\n", .{sum});
         for (vect) |*v| {
             v.* = v.*/sum;
         }
@@ -211,31 +222,32 @@ pub fn Attention(comptime T: type) type {
             return retval;
         }
 
-        pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T)) !Matrix(T) {
+        // this vesion does not have mask but otherwise is tested
+        // it does not have division by the dymention because it can be done
+        // internaly, by setting correctly the matrix. Maybe the mask will be
+        // added as a comptime parameter
+        pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T),
+            mask: enum{bidirectional, unidirectional}) !Matrix(T) {
             
-            // This can be parallelized
-            // query is tested and done right
             try affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = self.query});
-            std.debug.print("got query\n", .{});
-
             try affine(T, .{.mat = self.key_matrix, .input = ctx,
                 .vect = self.key_vect, .output = self.key});
-            std.debug.print("got key\n", .{});
+            try matprod(T, self.key, self.query, self.score);
 
             try affine2(T, .{.mat = ctx, .input = self.value_matrix,
                 .vect = self.value_vect, .output = self.value});
-            std.debug.print("got value\n", .{});
-            matprint(T, self.value_matrix);
 
-            try matprod(T, self.key, self.query, self.score);
-            std.debug.print("got score\n", .{});
+            if (mask == .unidirectional) {
+                for (0..self.score.height) |i| {
+                    for(self.score.row(i)[i+1..]) |*e| {
+                        e.* = -std.math.inf(T);
+                    }
+                }
+            }
             
             softmax(T, self.score);
-            std.debug.print("softmax of score\n", .{});
-
             try matprod(T, self.value, self.score, self.out);
-            std.debug.print("got out\n", .{});
 
             return self.out;
         }
@@ -331,7 +343,7 @@ test "matmult" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var seqv = [_]f16{
+    var seqv = [_]f64{
         1, 2, 3,
         2, 1, 3,
         4, 3, 1,
@@ -340,13 +352,13 @@ test "matmult" {
         2, 4, 3,
         1, 1, 1,
     };
-    const seq = Matrix(f16){
+    const seq = Matrix(f64){
         .height = 7,
         .width = 3,
         .ptr = &seqv,
     };
 
-    var ctxv = [_]f16{
+    var ctxv = [_]f64{
         1, 2,
         3, 4,
         5, 6,
@@ -356,14 +368,14 @@ test "matmult" {
         4, 5,
         6, 7,
     };
-    const ctx = Matrix(f16){
+    const ctx = Matrix(f64){
         .height = 8,
         .width = 2,
         .ptr = &ctxv,
     };
 
 
-    const att = try Attention(f16).init(allocator, .{
+    const att = try Attention(f64).init(allocator, .{
         .seq_dim = 3, .ctx_dim = 2, .attn_dim = 4, .out_dim = 5, .seq_len = 7, .ctx_len = 8});
     
     att.query_matrix.ptr[0] = 0;
@@ -415,7 +427,6 @@ test "matmult" {
     att.value_vect[3] = 11;
     att.value_vect[4] = 3;
 
-    _ = try att.calculate(seq, ctx);
-    matprint(f16, att.out);
-
+    _ = try att.calculate(seq, ctx, .unidirectional);
+    matprint(f64, att.out);
 }
