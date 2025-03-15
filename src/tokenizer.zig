@@ -1,6 +1,5 @@
 const std = @import("std");
-
-const float_type = f16;
+const parsing = @import("parsing.zig");
 
 pub fn Tokenizer() type {
     return struct {
@@ -10,10 +9,6 @@ pub fn Tokenizer() type {
 
         const Self = @This();
         const max_token_len = 16;
-        const ParsingError = error{
-            DataConflict,
-            WrongAlignement,
-        };
 
         fn trim(slice: []u8, char: u8) []u8 {
             var retval: []u8 = undefined;

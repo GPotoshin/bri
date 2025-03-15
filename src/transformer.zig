@@ -1,5 +1,6 @@
 /// seq2seq transformer
 const std = @import("std");
+const parsing = @import("parsing.zig");
 
 const float_t: type = f16;
 
@@ -175,6 +176,9 @@ pub fn Attention(comptime T: type) type {
         attn_dim: u32,
         out_dim: u32,
 
+        max_seq_len: u32,
+        max_ctx_len: u32,
+
         query_matrix: Matrix(T),
         query_vect: []T,
 
@@ -194,30 +198,97 @@ pub fn Attention(comptime T: type) type {
         const Self = @This();
         pub fn init(allocator: std.mem.Allocator, hyper_param: struct {
             seq_dim: u32, ctx_dim: u32, attn_dim: u32, out_dim: u32,
-            seq_len: u32, ctx_len: u32}) !Self {
+            max_seq_len: u32, max_ctx_len: u32}) !Self {
 
             var retval: Self = undefined;
             retval.seq_dim = hyper_param.seq_dim;
             retval.ctx_dim = hyper_param.ctx_dim;
             retval.attn_dim = hyper_param.attn_dim;
             retval.out_dim = hyper_param.out_dim;
+            retval.max_seq_len =hyper_param.max_seq_len;
+            retval.max_ctx_len =hyper_param.max_ctx_len;
 
             retval.query_matrix = try Matrix(T).init(allocator, hyper_param.attn_dim, hyper_param.seq_dim);
             retval.query_vect = try allocator.alloc(T, hyper_param.attn_dim);
-            retval.query = try Matrix(T).init(allocator, hyper_param.seq_len, hyper_param.attn_dim);
+            retval.query = try Matrix(T).init(allocator, hyper_param.max_seq_len, hyper_param.attn_dim);
             
             retval.key_matrix = try Matrix(T).init(allocator, hyper_param.attn_dim, hyper_param.ctx_dim);
             retval.key_vect = try allocator.alloc(T, hyper_param.attn_dim);
-            retval.key = try Matrix(T).init(allocator, hyper_param.ctx_len, hyper_param.attn_dim);
+            retval.key = try Matrix(T).init(allocator, hyper_param.max_ctx_len, hyper_param.attn_dim);
 
-            retval.score = try Matrix(T).init(allocator, hyper_param.seq_len, hyper_param.ctx_len); 
+            retval.score = try Matrix(T).init(allocator, hyper_param.max_seq_len, hyper_param.mac_ctx_len); 
 
             retval.value_matrix = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.ctx_dim);
             retval.value_vect = try allocator.alloc(T, hyper_param.out_dim);
-            retval.value = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.ctx_len);
+            retval.value = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.max_ctx_len);
 
 
-            retval.out = try Matrix(T).init(allocator, hyper_param.seq_len, hyper_param.out_dim);
+            retval.out = try Matrix(T).init(allocator, hyper_param.max_seq_len, hyper_param.out_dim);
+
+            return retval;
+        }
+
+        pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
+            // file format for attention
+            var reader = file.reader();
+
+            const type_size = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read type_size from file\n", .{});
+                return e;
+            };
+
+            if (type_size != @sizeOf(T)) {
+                std.debug.print("The type_size in a attention file is wrong\n", .{});
+                return error.DataConflict;
+            }
+
+            const seq_dim = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read seq_dim from file\n", .{});
+                return e;
+            };
+            const ctx_dim = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read seq_dim from file\n", .{});
+                return e;
+            };
+            const attn_dim = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read seq_dim from file\n", .{});
+                return e;
+            };
+            const out_dim = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read seq_dim from file\n", .{});
+                return e;
+            };
+            const max_seq_len = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read seq_dim from file\n", .{});
+                return e;
+            };
+            const max_ctx_len = reader.readInt(u32, .little) catch |e| {
+                std.debug.print("Can't read seq_dim from file\n", .{});
+                return e;
+            };
+
+            var retval = try init(allocator, .{.seq_dim = seq_dim, .ctx_dim = ctx_dim,
+                .attn_dim = attn_dim, .out_dim = out_dim, .max_seq_len =
+                max_seq_len, .max_ctx_len = max_ctx_len});
+           
+            var ptr: [*]u8 =  @ptrCast(retval.query_matrix.ptr);
+            var size: usize = retval.query_matrix.height*retval.query_matrix.width*@sizeOf(T);
+            var buffer: []u8 = ptr[0..size];
+            reader.read(buffer) catch |e| {
+                std.debug.print("can't read query matrix ({}x{}) {}\n",
+                    .{retval.query_matrix.height, retval.query_matrix.width, T});
+                return e;
+            };
+
+            ptr = @ptrCast(retval.query_vect.ptr);
+            size = retval.query_vect.len*@sizeOf(T);
+            buffer = ptr[0..size];
+            reader.read(buffer) catch |e| {
+                std.debug.print("can't read query vector ({}) {}\n",
+                    .{retval.query_vect.len, T});
+                return e;
+            };
+
 
             return retval;
         }
@@ -376,7 +447,7 @@ test "matmult" {
 
 
     const att = try Attention(f64).init(allocator, .{
-        .seq_dim = 3, .ctx_dim = 2, .attn_dim = 4, .out_dim = 5, .seq_len = 7, .ctx_len = 8});
+        .seq_dim = 3, .ctx_dim = 2, .attn_dim = 4, .out_dim = 5, .max_seq_len = 7, .max_ctx_len = 8});
     
     att.query_matrix.ptr[0] = 0;
     att.query_matrix.ptr[1] = 1;
