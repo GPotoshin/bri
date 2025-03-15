@@ -20,6 +20,7 @@ is tokenized into
 ## Problems
 + we need to agree on a common style of proofs
 + we need a table of proofs in English -> in Coq
++ we need a working llm
 
 To contact me, feel free write to <george.potoshin@gmail.com> or submit a suggestion
 on GitHub.
