@@ -199,29 +199,34 @@ pub fn Attention(comptime T: type) type {
             retval.key_vect = try allocator.alloc(T, hyper_param.attn_dim);
             retval.key = try Matrix(T).init(allocator, hyper_param.ctx_len, hyper_param.attn_dim);
 
+            retval.score = try Matrix(T).init(allocator, hyper_param.seq_len, hyper_param.ctx_len); 
+
             retval.value_matrix = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.ctx_dim);
             retval.value_vect = try allocator.alloc(T, hyper_param.out_dim);
             retval.value = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.ctx_len);
+
 
             retval.out = try Matrix(T).init(allocator, hyper_param.seq_len, hyper_param.out_dim);
 
             return retval;
         }
 
-        pub fn calulate(self: Self, seq: Matrix(T), context: Matrix(T)) !Matrix(T) {
+        pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T)) !Matrix(T) {
             
             // This can be parallelized
+            // query is tested and done right
             try affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = self.query});
             std.debug.print("got query\n", .{});
 
-            try affine(T, .{.mat = self.key_matrix, .input = context,
+            try affine(T, .{.mat = self.key_matrix, .input = ctx,
                 .vect = self.key_vect, .output = self.key});
             std.debug.print("got key\n", .{});
 
-            try affine2(T, .{.mat = context, .input = self.value_matrix,
+            try affine2(T, .{.mat = ctx, .input = self.value_matrix,
                 .vect = self.value_vect, .output = self.value});
             std.debug.print("got value\n", .{});
+            matprint(T, self.value_matrix);
 
             try matprod(T, self.key, self.query, self.score);
             std.debug.print("got score\n", .{});
@@ -353,7 +358,7 @@ test "matmult" {
     };
     const ctx = Matrix(f16){
         .height = 8,
-        .width = 3,
+        .width = 2,
         .ptr = &ctxv,
     };
 
@@ -410,7 +415,7 @@ test "matmult" {
     att.value_vect[3] = 11;
     att.value_vect[4] = 3;
 
-    _ = try att.calulate(seq, ctx);
+    _ = try att.calculate(seq, ctx);
     matprint(f16, att.out);
 
 }
