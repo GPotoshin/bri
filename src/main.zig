@@ -20,7 +20,13 @@ pub fn main() !void {
     // ffl_dim = 3072
     // layers = 12
     // context = 1024
-    var attention = tr.Attention(f32).init(allocator, .{.seq_dim = 768,
+    var attention = try tr.Attention(f32).init(allocator, .{.seq_dim = 768,
         .ctx_dim = 768, .attn_dim = 768, .out_dim = 768, .max_seq_len = 1024,
         .max_ctx_len = 1024});
+
+    var xoroshiro = std.Random.Xoroshiro128.init(193762);
+    const rand = xoroshiro.random();
+    attention.fillRandom(rand, 0.001);
+
+    try attention.writeToFile(attention_file);
 }

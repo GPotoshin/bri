@@ -183,17 +183,23 @@ pub fn softmax(comptime T: type, mat: Matrix(T)) void {
 
 }
 
-fn readMatrix(comptime T: type, reader: std.io.Reader, mat: Matrix(T)) !void {
+fn readMatrix(comptime T: type, reader: anytype, mat: Matrix(T)) !void {
     const ptr: [*]u8 =  @ptrCast(mat.ptr);
     const size: usize = mat.height*mat.width*@sizeOf(T);
     const buffer: []u8 = ptr[0..size];
     try reader.read(buffer);           
 }
 
-fn writeMatrix(comptime T: type, writer: std.io.Writer, mat: Matrix(T)) !void {
+fn writeMatrix(comptime T: type, writer: anytype, mat: Matrix(T)) !void {
     const ptr: [*]u8 = @ptrCast(mat.ptr);
     const size: usize = mat.height*mat.width*@sizeOf(T);
-    try writer.write(ptr[0..size]);
+    _ = try writer.write(ptr[0..size]);
+}
+
+fn writeVector(comptime T: type, writer: anytype, vec: []T) !void {
+    const ptr: [*]u8 = @ptrCast(vec.ptr);
+    const size: usize = vec.len*@sizeOf(T);
+    _ = try writer.write(ptr[0..size]);
 }
 
 pub fn Attention(comptime T: type) type {
@@ -405,7 +411,7 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            writer.write(self.query_vect) catch |e| {
+            writeVector(T, writer, self.query_vect) catch |e| {
                 std.debug.print("can't write query vector ({}) {}\n",
                     .{self.query_vect.len, T});
                 return e;
@@ -417,7 +423,7 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            writer.write(self.key_vect) catch |e| {
+            writeVector(T, writer, self.key_vect) catch |e| {
                 std.debug.print("can't write key vector ({}) {}\n",
                     .{self.key_vect.len, T});
                 return e;
@@ -429,7 +435,7 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            writer.write(self.value_vect) catch |e| {
+            writeVector(T, writer, self.value_vect) catch |e| {
                 std.debug.print("can't write key vector ({}) {}\n",
                     .{self.value_vect.len, T});
                 return e;
@@ -440,7 +446,11 @@ pub fn Attention(comptime T: type) type {
 
         pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
             self.query_matrix.fillRandom(rand, k);
-
+            fillVecRandom(T, rand, self.query_vect, k);
+            self.key_matrix.fillRandom(rand, k);
+            fillVecRandom(T, rand, self.key_vect, k);
+            self.value_matrix.fillRandom(rand, k);
+            fillVecRandom(T, rand, self.value_vect, k);
         }
     };
 }
