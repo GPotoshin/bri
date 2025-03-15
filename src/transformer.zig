@@ -187,7 +187,13 @@ fn readMatrix(comptime T: type, reader: anytype, mat: Matrix(T)) !void {
     const ptr: [*]u8 =  @ptrCast(mat.ptr);
     const size: usize = mat.height*mat.width*@sizeOf(T);
     const buffer: []u8 = ptr[0..size];
-    try reader.read(buffer);           
+    _ = try reader.read(buffer);           
+}
+
+fn readVector(comptime T: type, reader: anytype, vec: []T) !void {
+    const ptr: [*]u8 = @ptrCast(vec.ptr);
+    const size: usize = vec.len*@sizeOf(T);
+    _ = try reader.read(ptr[0..size]);
 }
 
 fn writeMatrix(comptime T: type, writer: anytype, mat: Matrix(T)) !void {
@@ -310,7 +316,7 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            reader.read(retval.query_vect) catch |e| {
+            readVector(T, reader, retval.query_vect) catch |e| {
                 std.debug.print("can't read query vector ({}) {}\n",
                     .{retval.query_vect.len, T});
                 return e;
@@ -322,7 +328,7 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            reader.read(retval.key_vect) catch |e| {
+            readVector(T, reader, retval.key_vect) catch |e| {
                 std.debug.print("can't read key vector ({}) {}\n",
                     .{retval.key_vect.len, T});
                 return e;
@@ -334,7 +340,7 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            reader.read(retval.value_vect) catch |e| {
+            readVector(T, reader, retval.value_vect) catch |e| {
                 std.debug.print("can't read key vector ({}) {}\n",
                     .{retval.value_vect.len, T});
                 return e;
