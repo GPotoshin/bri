@@ -2,7 +2,12 @@
 const std = @import("std");
 const parsing = @import("parsing.zig");
 
-const float_t: type = f16;
+fn fillVecRandom(comptime T: type, rand: std.Random, vec: []T, k: T) void {
+    for (vec) |*v| {
+        const f = rand.float(T);
+        v.* = k*(2.0*f - 1.0);
+    }
+}
 
 pub fn Matrix(comptime T: type) type {
     return struct {
@@ -36,6 +41,15 @@ pub fn Matrix(comptime T: type) type {
         pub inline fn row(self: Self, i: usize) []T {
             const start = i*self.width;
             return self.ptr[start..start+self.width];
+        }
+
+        /// This overwrites with random data with a uniform distribution over
+        /// [-k, k). Parameter k needs to be small as otherwise calculus explods
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            for (0..self.height) |i| {
+                const vec = self.row(i);
+                fillVecRandom(T, rand, vec, k);
+            }
         }
     };
 }
@@ -169,6 +183,19 @@ pub fn softmax(comptime T: type, mat: Matrix(T)) void {
 
 }
 
+fn readMatrix(comptime T: type, reader: std.io.Reader, mat: Matrix(T)) !void {
+    const ptr: [*]u8 =  @ptrCast(mat.ptr);
+    const size: usize = mat.height*mat.width*@sizeOf(T);
+    const buffer: []u8 = ptr[0..size];
+    try reader.read(buffer);           
+}
+
+fn writeMatrix(comptime T: type, writer: std.io.Writer, mat: Matrix(T)) !void {
+    const ptr: [*]u8 = @ptrCast(mat.ptr);
+    const size: usize = mat.height*mat.width*@sizeOf(T);
+    try writer.write(ptr[0..size]);
+}
+
 pub fn Attention(comptime T: type) type {
     return struct {
         seq_dim: u32,
@@ -216,7 +243,7 @@ pub fn Attention(comptime T: type) type {
             retval.key_vect = try allocator.alloc(T, hyper_param.attn_dim);
             retval.key = try Matrix(T).init(allocator, hyper_param.max_ctx_len, hyper_param.attn_dim);
 
-            retval.score = try Matrix(T).init(allocator, hyper_param.max_seq_len, hyper_param.mac_ctx_len); 
+            retval.score = try Matrix(T).init(allocator, hyper_param.max_seq_len, hyper_param.max_ctx_len); 
 
             retval.value_matrix = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.ctx_dim);
             retval.value_vect = try allocator.alloc(T, hyper_param.out_dim);
@@ -267,38 +294,53 @@ pub fn Attention(comptime T: type) type {
                 return e;
             };
 
-            var retval = try init(allocator, .{.seq_dim = seq_dim, .ctx_dim = ctx_dim,
+            const retval = try init(allocator, .{.seq_dim = seq_dim, .ctx_dim = ctx_dim,
                 .attn_dim = attn_dim, .out_dim = out_dim, .max_seq_len =
                 max_seq_len, .max_ctx_len = max_ctx_len});
            
-            var ptr: [*]u8 =  @ptrCast(retval.query_matrix.ptr);
-            var size: usize = retval.query_matrix.height*retval.query_matrix.width*@sizeOf(T);
-            var buffer: []u8 = ptr[0..size];
-            reader.read(buffer) catch |e| {
+            readMatrix(T, reader, retval.query_matrix) catch |e| {
                 std.debug.print("can't read query matrix ({}x{}) {}\n",
                     .{retval.query_matrix.height, retval.query_matrix.width, T});
                 return e;
             };
 
-            ptr = @ptrCast(retval.query_vect.ptr);
-            size = retval.query_vect.len*@sizeOf(T);
-            buffer = ptr[0..size];
-            reader.read(buffer) catch |e| {
+            reader.read(retval.query_vect) catch |e| {
                 std.debug.print("can't read query vector ({}) {}\n",
                     .{retval.query_vect.len, T});
                 return e;
             };
 
+            readMatrix(T, reader, retval.key_matrix) catch |e| {
+                std.debug.print("can't read key matrix ({}x{}) {}\n",
+                    .{retval.key_matrix.height, retval.key_matrix.width, T});
+                return e;
+            };
+
+            reader.read(retval.key_vect) catch |e| {
+                std.debug.print("can't read key vector ({}) {}\n",
+                    .{retval.key_vect.len, T});
+                return e;
+            };
+
+            readMatrix(T, reader, retval.value_matrix) catch |e| {
+                std.debug.print("can't read value matrix ({}x{}) {}\n",
+                    .{retval.value_matrix.height, retval.value_matrix.width, T});
+                return e;
+            };
+
+            reader.read(retval.value_vect) catch |e| {
+                std.debug.print("can't read key vector ({}) {}\n",
+                    .{retval.value_vect.len, T});
+                return e;
+            };
 
             return retval;
         }
 
-        // this vesion does not have mask but otherwise is tested
-        // it does not have division by the dymention because it can be done
-        // internaly, by setting correctly the matrix. Maybe the mask will be
-        // added as a comptime parameter
+        // this vesion is tested it does not have division by the dymention
+        // because it can be done internaly, by setting correctly the matrix.
         pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T),
-            mask: enum{bidirectional, unidirectional}) !Matrix(T) {
+            comptime mask: enum{bidirectional, unidirectional}) !Matrix(T) {
             
             try affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = self.query});
@@ -321,6 +363,84 @@ pub fn Attention(comptime T: type) type {
             try matprod(T, self.value, self.score, self.out);
 
             return self.out;
+        }
+
+        pub fn writeToFile(self: Self, file: std.fs.File) !void {
+            try file.seekTo(0);
+            var writer = file.writer();
+            
+            writer.writeInt(u32, @sizeOf(T), .little) catch |e| {
+                std.debug.print("Can't write type_size to a file\n", .{});
+                return e;
+            };
+
+            writer.writeInt(u32, self.seq_dim, .little) catch |e| {
+                std.debug.print("Can't write seq_dim from file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, self.ctx_dim, .little) catch |e| {
+                std.debug.print("Can't write ctx_dim from file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, self.attn_dim, .little) catch |e| {
+                std.debug.print("Can't write attn_dim from file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, self.out_dim, .little) catch |e| {
+                std.debug.print("Can't write out_dim from file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, self.max_seq_len, .little) catch |e| {
+                std.debug.print("Can't write max_seq_len from file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, self.max_ctx_len, .little) catch |e| {
+                std.debug.print("Can't write seq_dim from file\n", .{});
+                return e;
+            };
+
+            writeMatrix(T, writer, self.query_matrix) catch |e| {
+                std.debug.print("can't write query matrix ({}x{}) {}\n",
+                    .{self.query_matrix.height, self.query_matrix.width, T});
+                return e;
+            };
+
+            writer.write(self.query_vect) catch |e| {
+                std.debug.print("can't write query vector ({}) {}\n",
+                    .{self.query_vect.len, T});
+                return e;
+            };
+
+            writeMatrix(T, writer, self.key_matrix) catch |e| {
+                std.debug.print("can't write key matrix ({}x{}) {}\n",
+                    .{self.key_matrix.height, self.key_matrix.width, T});
+                return e;
+            };
+
+            writer.write(self.key_vect) catch |e| {
+                std.debug.print("can't write key vector ({}) {}\n",
+                    .{self.key_vect.len, T});
+                return e;
+            };
+
+            writeMatrix(T, writer, self.value_matrix) catch |e| {
+                std.debug.print("can't write value matrix ({}x{}) {}\n",
+                    .{self.value_matrix.height, self.value_matrix.width, T});
+                return e;
+            };
+
+            writer.write(self.value_vect) catch |e| {
+                std.debug.print("can't write key vector ({}) {}\n",
+                    .{self.value_vect.len, T});
+                return e;
+            };
+
+            try file.setEndPos(try file.getPos());
+        }
+
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            self.query_matrix.fillRandom(rand, k);
+
         }
     };
 }
