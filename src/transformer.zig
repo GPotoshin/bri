@@ -43,6 +43,19 @@ pub fn Matrix(comptime T: type) type {
             return self.ptr[start..start+self.width];
         }
 
+        pub inline fn submatrix(self: Self, start: u32, end: u32) ?Self {
+            if (start < 0 or start >= end or end > self.height) {
+                std.debug.print("wrong indices for sub matrix\n", .{});
+                return null;
+            }
+
+            return Matrix(T){
+                .height = end - start,
+                .width = self.width,
+                .ptr = self.ptr + self.width*start,
+            };
+        }
+
         /// This overwrites with random data with a uniform distribution over
         /// [-k, k). Parameter k needs to be small as otherwise calculus explods
         pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
@@ -76,7 +89,7 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T
         return error.IncompatibleObjects; 
     }
 
-    if (out.width != mat1.height) {
+    if (out.width < mat1.height) {
         std.debug.print("Wrong width in out\n", .{});
         return error.IncompatibleObjects; 
     }
@@ -94,6 +107,15 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T
             for (0..vect.len) |k| {
                 out_vect[j] += mat1.at_nocheck(j, k)*vect[k];
             }
+        }
+        for (mat1.height..out.width) |j| {
+            out_vect[j] = 0;
+        }
+    }
+    for (mat2.height..out.height) |i| {
+        const vect = out.row(i);
+        for (vect) |*v| {
+            v.* = 0;
         }
     }
 }
@@ -237,7 +259,12 @@ pub fn Attention(comptime T: type) type {
         const Self = @This();
         pub fn init(allocator: std.mem.Allocator, hyper_param: struct {
             seq_dim: u32, ctx_dim: u32, attn_dim: u32, out_dim: u32,
-            max_seq_len: u32, max_ctx_len: u32}) !Self {
+            max_seq_len: u32, max_ctx_len: u32}, out: Matrix(T)) !Self {
+
+            if (out.height != hyper_param.max_seq_len or out.width != hyper_param.out_dim) {
+                std.debug.print("Output matrix is of a wrong size\n", .{});
+                return error.DataConflict;
+            }
 
             var retval: Self = undefined;
             retval.seq_dim = hyper_param.seq_dim;
@@ -262,12 +289,13 @@ pub fn Attention(comptime T: type) type {
             retval.value = try Matrix(T).init(allocator, hyper_param.out_dim, hyper_param.max_ctx_len);
 
 
-            retval.out = try Matrix(T).init(allocator, hyper_param.max_seq_len, hyper_param.out_dim);
+            retval.out = out;
 
             return retval;
         }
 
-        pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
+        pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File,
+            out: Matrix(T)) !Self {
             // file format for attention
             var reader = file.reader();
 
@@ -308,7 +336,7 @@ pub fn Attention(comptime T: type) type {
 
             const retval = try init(allocator, .{.seq_dim = seq_dim, .ctx_dim = ctx_dim,
                 .attn_dim = attn_dim, .out_dim = out_dim, .max_seq_len =
-                max_seq_len, .max_ctx_len = max_ctx_len});
+                max_seq_len, .max_ctx_len = max_ctx_len}, out);
            
             readMatrix(T, reader, retval.query_matrix) catch |e| {
                 std.debug.print("can't read query matrix ({}x{}) {}\n",
@@ -461,6 +489,70 @@ pub fn Attention(comptime T: type) type {
     };
 }
 
+pub fn MHAttention(comptime T: type) type {
+    return struct {
+        heads: u32,
+
+        seq_dim: u32,
+        ctx_dim: u32,
+        att_dim: u32,
+        mid_dim: u32,
+        out_dim: u32,
+
+        att_results: Matrix(T),
+        attention: []Attention(T),
+        comb_matrix: Matrix(T),
+        comb_vect: []T,
+
+
+        out: Matrix(T),
+
+        const Self = @This();
+        pub fn init(allocator: std.mem.Allocator, hyper_param: struct {
+            seq_dim: u32, ctx_dim: u32, att_dim:u32, mid_dim: u32, heads: u32,
+            out_dim: u32, max_seq_len: u32, max_ctx_len: u32}, out: Matrix(T)) Self {    
+            var retval: Self = undefined;
+
+            // maybe change the number of parameters passed?
+            if (out.height != hyper_param.max_seq_len or out.width !=
+                hyper_param.out_dim) {
+                std.debug.print("Wrong dimensions for output matrix for MHAttension\n", .{});
+                return error.DataConflict;
+            }
+
+            retval.heads = hyper_param.heads;
+            retval.seq_dim = hyper_param.seq_dim;
+            retval.ctx_dim = hyper_param.ctx_dim;
+            retval.mid_dim = hyper_param.mid_dim;
+            retval.out_dim = hyper_param.out_dim;
+
+            retval.attention = try allocator.alloc(T, hyper_param.heads);
+            retval.att_results = try Matrix(T).init(allocator, hyper_param.max_seq_len
+                * hyper_param.heads, hyper_param.mid_dim);
+            for (0..hyper_param.heads) |i| {
+                retval.attention[i] = try Attention(T).init(allocator, .{
+                    .seq_dim = hyper_param.seq_dim,
+                    .ctx_dim = hyper_param.ctx_dim,
+                    .attn_dim = hyper_param.att_dim,
+                    .out_dim = hyper_param.mid_dim,
+                    .max_seq_len = hyper_param.max_seq_len,
+                    .max_ctx_len = hyper_param.max_ctx_len},
+                    retval.att_results.submatrix(i*hyper_param.max_seq_len,
+                        (i+1)*hyper_param.max_seq_len),
+                );
+            }
+
+            retval.comb_matrix = try Matrix(T).init(allocator, hyper_param.out_dim,
+                hyper_param.mid_dim*hyper_param.heads);
+            retval.comb_vect = try allocator.alloc(T, hyper_param.out_dim);
+            retval.out = out;
+
+            return retval;
+        }
+    };
+}
+
+
 fn EncodeLayer(T: type) type {
     return struct {
         enc_attention_matrix: Matrix(T),
@@ -544,96 +636,4 @@ pub fn EDTransformer(comptime T: type) type {
         }
 
     };
-}
-
-test "matmult" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-
-    var seqv = [_]f64{
-        1, 2, 3,
-        2, 1, 3,
-        4, 3, 1,
-        4, 4, 1,
-        5, 3, 5,
-        2, 4, 3,
-        1, 1, 1,
-    };
-    const seq = Matrix(f64){
-        .height = 7,
-        .width = 3,
-        .ptr = &seqv,
-    };
-
-    var ctxv = [_]f64{
-        1, 2,
-        3, 4,
-        5, 6,
-        7, 8,
-        9, 1,
-        2, 3,
-        4, 5,
-        6, 7,
-    };
-    const ctx = Matrix(f64){
-        .height = 8,
-        .width = 2,
-        .ptr = &ctxv,
-    };
-
-
-    const att = try Attention(f64).init(allocator, .{
-        .seq_dim = 3, .ctx_dim = 2, .attn_dim = 4, .out_dim = 5, .max_seq_len = 7, .max_ctx_len = 8});
-    
-    att.query_matrix.ptr[0] = 0;
-    att.query_matrix.ptr[1] = 1;
-    att.query_matrix.ptr[2] = 2;
-    att.query_matrix.ptr[3] = 3;
-    att.query_matrix.ptr[4] = 4;
-    att.query_matrix.ptr[5] = 5;
-    att.query_matrix.ptr[6] = 6;
-    att.query_matrix.ptr[7] = 7;
-    att.query_matrix.ptr[8] = 8;
-    att.query_matrix.ptr[9] = 9;
-    att.query_matrix.ptr[10] = 10;
-    att.query_matrix.ptr[11] = 11;
-
-    att.query_vect[0] = 3;
-    att.query_vect[1] = 1;
-    att.query_vect[2] = 2;
-    att.query_vect[3] = 4;
-
-    att.key_matrix.ptr[0] = 1; 
-    att.key_matrix.ptr[1] = 2; 
-    att.key_matrix.ptr[2] = 3; 
-    att.key_matrix.ptr[3] = 4; 
-    att.key_matrix.ptr[4] = 5; 
-    att.key_matrix.ptr[5] = 6; 
-    att.key_matrix.ptr[6] = 7; 
-    att.key_matrix.ptr[7] = 8; 
-
-    att.key_vect.ptr[0] = 4;
-    att.key_vect.ptr[1] = 9;
-    att.key_vect.ptr[2] = 6;
-    att.key_vect.ptr[3] = 1;
-
-    att.value_matrix.ptr[0] = -9;
-    att.value_matrix.ptr[1] = -8;
-    att.value_matrix.ptr[2] = -7;
-    att.value_matrix.ptr[3] = -6;
-    att.value_matrix.ptr[4] = -5;
-    att.value_matrix.ptr[5] = -4;
-    att.value_matrix.ptr[6] = -3;
-    att.value_matrix.ptr[7] = -2;
-    att.value_matrix.ptr[8] = -1;
-    att.value_matrix.ptr[9] = 0;
-
-    att.value_vect[0] = 3;
-    att.value_vect[1] = -1;
-    att.value_vect[2] = 10;
-    att.value_vect[3] = 11;
-    att.value_vect[4] = 3;
-
-    _ = try att.calculate(seq, ctx, .unidirectional);
-    matprint(f64, att.out);
 }

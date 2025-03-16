@@ -24,8 +24,18 @@ pub fn main() !void {
     //     .ctx_dim = 768, .attn_dim = 768, .out_dim = 768, .max_seq_len = 1024,
     //     .max_ctx_len = 1024});
 
+    var b = std.Random.Xoroshiro128.init(12);
+    const rand = b.random();
+
+    const seq = try tr.Matrix(f32).init(allocator, 5, 768); 
+    const ctx = try tr.Matrix(f32).init(allocator, 5, 768); 
+
+    seq.fillRandom(rand, 0.001);
+    ctx.fillRandom(rand, 0.001);
+
     const att = try tr.Attention(f32).initFromFile(allocator, attention_file);
-    std.debug.print("{}, {}, {}, {}, {}, {}\n", .{att.seq_dim, att.ctx_dim,
-    att.attn_dim, att.out_dim, att.max_seq_len, att.max_ctx_len});
+
+    _ = try att.calculate(seq, ctx, .bidirectional);
+    std.debug.print("{}\n", .{att.out.at_nocheck(1, 2)});
 
 }
