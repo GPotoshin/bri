@@ -232,14 +232,10 @@ fn writeVector(comptime T: type, writer: anytype, vec: []T) !void {
     _ = try writer.write(ptr[0..size]);
 }
 
-const FloatId = enum(u32) {
-    f32 = @sizeOf(f32),
-};
-
 const AttentionHeader = struct {
     version: u32,
 
-    type: FloatId,
+    type_len: u32,
 
     seq_dim: u32,
     ctx_dim: u32,
@@ -253,15 +249,13 @@ const AttentionHeader = struct {
     const Self = @This();
     pub fn write(self: Self, writer: anytype) !void {
         writer.writeInt(u32, self.version, .little) catch |e| {
+            std.debug.print("Can't write version to a file\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.type_len, .little) catch |e| {
             std.debug.print("Can't write type_size to a file\n", .{});
             return e;
         };
-
-        writer.writeInt(u32, @sizeOf(T), .little) catch |e| {
-            std.debug.print("Can't write type_size to a file\n", .{});
-            return e;
-        };
-
         writer.writeInt(u32, self.seq_dim, .little) catch |e| {
             std.debug.print("Can't write seq_dim from file\n", .{});
             return e;
@@ -289,32 +283,35 @@ const AttentionHeader = struct {
     }
 
     pub fn read(self: *Self, reader: anytype) !void {
-
-        header.version = reader.readInt(u32, .little) catch |e| {
+        self.version = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read version\n", .{});
             return e;
         };
-        header.seq_dim = reader.readInt(u32, .little) catch |e| {
+        self.type_len = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read type\n", .{});
+            return e;
+        };
+        self.seq_dim = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read seq_dim\n", .{});
             return e;
         };
-        header.ctx_dim = reader.readInt(u32, .little) catch |e| {
+        self.ctx_dim = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read ctx_dim\n", .{});
             return e;
         };
-        header.att_dim = reader.readInt(u32, .little) catch |e| {
+        self.att_dim = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read att_dim\n", .{});
             return e;
         };
-        header.out_dim = reader.readInt(u32, .little) catch |e| {
+        self.out_dim = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read out_dim\n", .{});
             return e;
         };
-        header.max_seq_len = reader.readInt(u32, .little) catch |e| {
+        self.max_seq_len = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read max_seq_len\n", .{});
             return e;
         };
-        header.max_ctx_len = reader.readInt(u32, .little) catch |e| {
+        self.max_ctx_len = reader.readInt(u32, .little) catch |e| {
             std.debug.print("Can't read max_ctx_len\n", .{});
             return e;
         };
@@ -455,37 +452,32 @@ pub fn Attention(comptime T: type) type {
             return self.out;
         }
 
-
+        pub fn writeWeights(self: Self, writer: anytype) !void {
             self.query_matrix.write(writer) catch |e| {
                 std.debug.print("can't write query matrix ({}x{}) {}\n",
                     .{self.query_matrix.height, self.query_matrix.width, T});
                 return e;
             };
-
             writeVector(T, writer, self.query_vect) catch |e| {
                 std.debug.print("can't write query vector ({}) {}\n",
                     .{self.query_vect.len, T});
                 return e;
             };
-
             self.key_matrix.write(writer) catch |e| {
                 std.debug.print("can't write key matrix ({}x{}) {}\n",
                     .{self.key_matrix.height, self.key_matrix.width, T});
                 return e;
             };
-
             writeVector(T, writer, self.key_vect) catch |e| {
                 std.debug.print("can't write key vector ({}) {}\n",
                     .{self.key_vect.len, T});
                 return e;
             };
-
             self.value_matrix.write(writer) catch |e| {
                 std.debug.print("can't write value matrix ({}x{}) {}\n",
                     .{self.value_matrix.height, self.value_matrix.width, T});
                 return e;
             };
-
             writeVector(T, writer, self.value_vect) catch |e| {
                 std.debug.print("can't write key vector ({}) {}\n",
                     .{self.value_vect.len, T});
@@ -504,15 +496,122 @@ pub fn Attention(comptime T: type) type {
     };
 }
 
+const MHAttentionHeader = struct {
+    version: u32,
+    type_len: u32,
+    heads: u32,
+    seq_dim: u32,
+    ctx_dim: u32,
+    att_dim: u32,
+    mid_dim: u32,
+    out_dim: u32,
+    max_seq_len: u32,
+    max_ctx_len: u32,
+
+    const Self = @This();
+    pub fn write(self: Self, writer: anytype) !void {
+        writer.writeInt(u32, self.version, .little) catch |e| {
+            std.debug.print("Can't write version\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.type_len, .little) catch |e| {
+            std.debug.print("Can't write type_size\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.heads, .little) catch |e| {
+            std.debug.print("Can't write heads\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.seq_dim, .little) catch |e| {
+            std.debug.print("Can't write seq_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.ctx_dim, .little) catch |e| {
+            std.debug.print("Can't write ctx_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.att_dim, .little) catch |e| {
+            std.debug.print("Can't write att_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.mid_dim, .little) catch |e| {
+            std.debug.print("Can't write mid_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.out_dim, .little) catch |e| {
+            std.debug.print("Can't write out_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.max_seq_len, .little) catch |e| {
+            std.debug.print("Can't write max_seq_len\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.max_ctx_len, .little) catch |e| {
+            std.debug.print("Can't write seq_dim\n", .{});
+            return e;
+        };
+    }
+
+    pub fn read(self: *Self, reader: anytype) !void {
+        self.version = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read version\n", .{});
+            return e;
+        };
+        self.type_len = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read type\n", .{});
+            return e;
+        };
+        self.heads = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read heads\n", .{});
+            return e;
+        };
+        self.seq_dim = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read seq_dim\n", .{});
+            return e;
+        };
+        self.ctx_dim = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read ctx_dim\n", .{});
+            return e;
+        };
+        self.att_dim = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read att_dim\n", .{});
+            return e;
+        };
+        self.mid_dim = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read mid_dim\n", .{});
+            return e;
+        };
+        self.out_dim = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read out_dim\n", .{});
+            return e;
+        };
+        self.max_seq_len = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read max_seq_len\n", .{});
+            return e;
+        };
+        self.max_ctx_len = reader.readInt(u32, .little) catch |e| {
+            std.debug.print("Can't read max_ctx_len\n", .{});
+            return e;
+        };
+    }
+
+    pub fn toAttentionHeader(self: Self) AttentionHeader {
+        return .{
+            .version = self.version,
+            .type_len = self.type_len,
+            .seq_dim = self.seq_dim,
+            .ctx_dim = self.ctx_dim,
+            .att_dim = self.att_dim,
+            .out_dim = self.mid_dim,
+            .max_seq_len = self.max_seq_len,
+            .max_ctx_len = self.max_ctx_len,
+        };
+    }
+};
+
 pub fn MHAttention(comptime T: type) type {
     return struct {
-        heads: u32,
-
-        seq_dim: u32,
-        ctx_dim: u32,
-        att_dim: u32,
-        mid_dim: u32,
-        out_dim: u32,
+        header: MHAttentionHeader,
 
         att_results: Matrix(T),
         attention: []Attention(T),
@@ -523,29 +622,24 @@ pub fn MHAttention(comptime T: type) type {
         out: Matrix(T),
 
         const Self = @This();
-        pub fn init(allocator: std.mem.Allocator, hyper_param: struct {
-            seq_dim: u32, ctx_dim: u32, att_dim:u32, mid_dim: u32, heads: u32,
-            out_dim: u32, max_seq_len: u32, max_ctx_len: u32}, out: Matrix(T)) Self {    
+        pub fn init(allocator: std.mem.Allocator, header: MHAttentionHeader, out: Matrix(T)) Self {    
             var retval: Self = undefined;
 
             // maybe change the number of parameters passed?
-            if (out.height != hyper_param.max_seq_len or out.width !=
-                hyper_param.out_dim) {
+            if (out.height != header.max_seq_len or out.width != header.out_dim) {
                 std.debug.print("Wrong dimensions for output matrix for MHAttension\n", .{});
                 return error.DataConflict;
             }
 
-            retval.heads = hyper_param.heads;
-            retval.seq_dim = hyper_param.seq_dim;
-            retval.ctx_dim = hyper_param.ctx_dim;
-            retval.mid_dim = hyper_param.mid_dim;
-            retval.out_dim = hyper_param.out_dim;
+            retval.header = header;
 
             retval.attention = try allocator.alloc(T, hyper_param.heads);
             retval.att_results = try Matrix(T).init(allocator, hyper_param.max_seq_len
                 * hyper_param.heads, hyper_param.mid_dim);
             for (0..hyper_param.heads) |i| {
                 retval.attention[i] = try Attention(T).init(allocator, .{
+                    .version = 0,
+                    .type_len = @sizeOf(T),
                     .seq_dim = hyper_param.seq_dim,
                     .ctx_dim = hyper_param.ctx_dim,
                     .att_dim = hyper_param.att_dim,
@@ -565,7 +659,10 @@ pub fn MHAttention(comptime T: type) type {
             return retval;
         }
 
-        pub initFromReader(allocator: std.mem.Allocator, reader: anytype) Self {
+        pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
+            try file.seekTo(0);
+            const header = AttentionHeader.read(, reader: anytype)
+            
 
 
         }
