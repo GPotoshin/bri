@@ -88,6 +88,9 @@ const AttentionHeader = struct {
     }
 };
 
+
+// @Todo: actually as calculus are happenning on gpu, in the future
+// intermediate memory should be allocated for gpu!
 pub fn Attention(comptime T: type) type {
     return struct {
         header: AttentionHeader,
@@ -128,24 +131,36 @@ pub fn Attention(comptime T: type) type {
 
         /// allocates the memory for all weights with dimensions from it's header
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
-            const header = AttentionHeader.read(reader);
-            self.query_matrix = try Matrix(T).init(allocator, self.att_dim, self.seq_dim);
-            self.query_vect = try allocator.alloc(T, self.att_dim);
-            self.query = try Matrix(T).init(allocator, self.max_seq_len, self.att_dim);
+            const header = self.header;
+            self.query_matrix = try Matrix(T).init(allocator, header.att_dim, header.seq_dim);
+            self.query_vect = try allocator.alloc(T, header.att_dim);
+            self.query = try Matrix(T).init(allocator, header.max_seq_len, header.att_dim);
             
-            self.key_matrix = try Matrix(T).init(allocator, self.att_dim, self.ctx_dim);
-            self.key_vect = try allocator.alloc(T, self.att_dim);
-            self.key = try Matrix(T).init(allocator, self.max_ctx_len, self.att_dim);
+            self.key_matrix = try Matrix(T).init(allocator, header.att_dim, header.ctx_dim);
+            self.key_vect = try allocator.alloc(T, header.att_dim);
+            self.key = try Matrix(T).init(allocator, header.max_ctx_len, header.att_dim);
 
-            self.score = try Matrix(T).init(allocator, self.max_seq_len, self.max_ctx_len); 
+            self.score = try Matrix(T).init(allocator, header.max_seq_len, header.max_ctx_len); 
 
-            self.value_matrix = try Matrix(T).init(allocator, self.out_dim, self.ctx_dim);
-            self.value_vect = try allocator.alloc(T, self.out_dim);
-            self.value = try Matrix(T).init(allocator, self.out_dim, self.max_ctx_len);
+            self.value_matrix = try Matrix(T).init(allocator, header.out_dim, header.ctx_dim);
+            self.value_vect = try allocator.alloc(T, header.out_dim);
+            self.value = try Matrix(T).init(allocator, header.out_dim, header.max_ctx_len);
         }
 
-        pub fn free(self: *Self, allocator: std.mem.Allocator) !void {
+        pub fn destry(self: *Self, allocator: std.mem.Allocator) !void {
+            self.query_matrix.destroy(allocator);
+            allocator.free(self.query_vect);
+            self.query.destroy(allocator);
 
+            self.key_matrix.destroy(allocator);
+            allocator.free(self.key_vect);
+            self.key.destroy(allocator);
+
+            self.score.detroy(allocator);
+
+            self.value_matrix.destroy(allocator);
+            allocator.free(self.value_vect);
+            self.value.destroy(allocator);
         }
 
         /// reads from the beginning of the file its header and weights. If you
@@ -156,6 +171,7 @@ pub fn Attention(comptime T: type) type {
             var reader = file.reader();
 
             var retval: Self = undefined;
+            retval.out = out;
             try retval.readHeader(reader);
             try retval.allocateForHeader(allocator);
             try retval.readWeights(reader);

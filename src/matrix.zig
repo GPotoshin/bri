@@ -253,11 +253,41 @@ pub fn Matrix(comptime T: type) type {
         }
 
         test addRow {
-
+            var content = [6]T {
+                1, 2, 3,
+                4, 5, 6
+            };
+            var forme = [3]T {1, 2, 3};
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+            try mat.addRow(&forme);
+            try std.testing.expectEqualSlices(T, &[_]T {
+                2, 4, 6,
+                5, 7, 9,
+            },
+            mat.data());
         }
 
         test addCol {
-
+            var content = [6]T {
+                1, 2, 3,
+                4, 5, 6
+            };
+            var vect = [2]T {1, 2};
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+            try mat.addCol(&vect);
+            try std.testing.expectEqualSlices(T, &[_]T {
+                2, 3, 4,
+                6, 7, 8,
+            },
+            mat.data());
         }
     };
 }
@@ -291,8 +321,9 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T
         var out_vect = out.row(i);
         for (0..mat1.height) |j| {
             out_vect[j] = 0;
+            const vect2 = mat1.row(j);
             for (0..vect.len) |k| {
-                out_vect[j] += mat1.at_nocheck(j, k)*vect[k];
+                out_vect[j] += vect2[k]*vect[k];
             }
         }
         for (mat1.height..out.width) |j| {
@@ -371,3 +402,167 @@ pub fn writeVector(comptime T: type, writer: anytype, vec: []T) !void {
     _ = try writer.write(ptr[0..size]);
 }
 
+test matprod {
+    var cont1 = [_]f32 {
+        1, 2, 3,
+        4, 5, 6,
+    };
+    var cont2 = [_]f32 {
+        1, 0, 1,
+        0, 2, 2,
+        4, 2, 3,
+        8, 0, 2
+    };
+    var cont3: [8]f32 = undefined;
+
+    const mat1 = Matrix(f32) {
+        .height = 2,
+        .width = 3,
+        .ptr = &cont1,
+    };
+    const mat2 = Matrix(f32) {
+        .height = 4,
+        .width = 3,
+        .ptr = &cont2,
+    };
+    const out = Matrix(f32) {
+        .height = 4,
+        .width = 2,
+        .ptr = &cont3,
+    };
+    
+    try matprod(f32, mat1, mat2, out);
+    
+    try std.testing.expectEqualSlices(f32, &[_]f32 {
+        4, 10,
+        10, 22,
+        17, 44, 
+        14, 44}, &cont3);
+}
+
+test affine {
+    var cont1 = [_]f32 {
+        1, 2, 3,
+        4, 5, 6,
+    };
+    var cont2 = [_]f32 {
+        1, 0, 1,
+        0, 2, 2,
+        4, 2, 3,
+        8, 0, 2
+    };
+    var cont3: [8]f32 = undefined;
+
+    const mat1 = Matrix(f32) {
+        .height = 2,
+        .width = 3,
+        .ptr = &cont1,
+    };
+    const mat2 = Matrix(f32) {
+        .height = 4,
+        .width = 3,
+        .ptr = &cont2,
+    };
+    const out = Matrix(f32) {
+        .height = 4,
+        .width = 2,
+        .ptr = &cont3,
+    };
+    var vec = [_]f32 {1, 1};
+    try affine(f32, .{.mat = mat1, .input = mat2, .vect = &vec, .output = out});
+
+    try std.testing.expectEqualSlices(f32, &[_]f32 {
+        5, 11,
+        11, 23,
+        18, 45, 
+        15, 45}, &cont3);
+}
+
+test affine2 {
+    var cont1 = [_]f32 {
+        1, 2, 3,
+        4, 5, 6,
+    };
+    var cont2 = [_]f32 {
+        1, 0, 1,
+        0, 2, 2,
+        4, 2, 3,
+        8, 0, 2
+    };
+    var cont3: [8]f32 = undefined;
+
+    const mat1 = Matrix(f32) {
+        .height = 2,
+        .width = 3,
+        .ptr = &cont1,
+    };
+    const mat2 = Matrix(f32) {
+        .height = 4,
+        .width = 3,
+        .ptr = &cont2,
+    };
+    const out = Matrix(f32) {
+        .height = 4,
+        .width = 2,
+        .ptr = &cont3,
+    };
+    var vec = [_]f32 {1, 2, 3, 4};
+    try affine2(f32, .{.mat = mat1, .input = mat2, .vect = &vec, .output = out});
+
+    try std.testing.expectEqualSlices(f32, &[_]f32 {
+        5, 11,
+        12, 24,
+        20, 47, 
+        18, 48}, &cont3);
+}
+
+test softmax {
+    var cont = [_]f32 {
+        1, 2,
+        -1, -2,
+        0, 0,
+    };
+    const mat = Matrix(f32) {
+        .height = 3,
+        .width = 2,
+        .ptr = &cont,
+    };
+
+    softmax(f32, mat);
+
+    try std.testing.expect(@abs(cont[0]-@exp(1.0)/(@exp(1.0)+@exp(2.0))) < 0.0001);
+    try std.testing.expect(@abs(cont[1]-@exp(2.0)/(@exp(1.0)+@exp(2.0))) < 0.0001);
+    try std.testing.expect(@abs(cont[2]-@exp(-1.0)/(@exp(-1.0)+@exp(-2.0))) < 0.0001);
+    try std.testing.expect(@abs(cont[3]-@exp(-2.0)/(@exp(-1.0)+@exp(-2.0))) < 0.0001);
+    try std.testing.expect(@abs(cont[4]-@exp(0.0)/(@exp(0.0)+@exp(0.0))) < 0.0001);
+    try std.testing.expect(@abs(cont[5]-@exp(0.0)/(@exp(0.0)+@exp(0.0))) < 0.0001);
+}
+
+test fillVecRandom {
+    var xoshiro = std.Random.Xoshiro256.init(123);
+    const rand = xoshiro.random();
+    var cont: [5]f32 = undefined;
+    fillVecRandom(f32, rand, &cont, 1);
+}
+
+test readVector {
+    var content = [6]f32 {0, 0, 0, 0, 0, 0};
+    var buffer = [6]f32 {1, 2, 3, 4, 5, 6};
+    const handler: [*]u8 = @ptrCast((buffer[0..]).ptr);
+    var stream = std.io.fixedBufferStream(handler[0..6*@sizeOf(f32)]);
+    const reader = stream.reader();
+
+    try readVector(f32, reader, &content);
+    try std.testing.expectEqual(buffer, content);
+}
+
+test writeVector {
+    var buffer = [6]f32 {0, 0, 0, 0, 0, 0};
+    var content = [6]f32 {1, 2, 3, 4, 5, 6};
+    const handler: [*]u8 = @ptrCast((buffer[0..]).ptr);
+    var stream = std.io.fixedBufferStream(handler[0..6*@sizeOf(f32)]);
+    const writer = stream.writer();
+
+    try writeVector(f32, writer, &content);
+    try std.testing.expectEqual(buffer, content);
+}
