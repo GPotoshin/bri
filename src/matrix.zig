@@ -93,7 +93,7 @@ pub fn Matrix(comptime T: type) type {
             }
         }
 
-        pub fn matscale(self: *Self, k: T) void {
+        pub fn scale(self: Self, k: T) void {
             for(0..self.height) |i| {
                 const vec = self.row(i);
                 for(vec) |*v| {
@@ -170,7 +170,7 @@ pub fn Matrix(comptime T: type) type {
                 .ptr = &content,
             };
             try std.testing.expectEqualSlices(T,
-                ([_]T{4, 5, 6})[0..],
+                &[_]T{4, 5, 6},
                 mat.row(1),
             );
         }
@@ -187,12 +187,11 @@ pub fn Matrix(comptime T: type) type {
                 .ptr = &content,
             };
             const sub = mat.submatrix(0, 2);
-            try std.testing.expectEqualSlices(T, ([_]T {
-                    1, 2,
-                    3, 4,
-                })[0..],
-                sub.?.data(),
-            );
+            try std.testing.expectEqualSlices(T, &[_]T {
+                1, 2,
+                3, 4,
+            },
+            sub.?.data());
         }
 
         test fillRandom {
@@ -204,6 +203,62 @@ pub fn Matrix(comptime T: type) type {
             mat.destroy(std.testing.allocator);
         }
 
+        test write {
+            var content = [6]T {1, 2, 3, 4, 5, 6};
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+
+            var buffer = [6]T {0, 0, 0, 0, 0, 0};
+            const handler: [*]u8 = @ptrCast((buffer[0..]).ptr);
+            var stream = std.io.fixedBufferStream(handler[0..6*@sizeOf(T)]);
+            const writer = stream.writer();
+
+            try mat.write(writer);
+
+            try std.testing.expectEqual(content, buffer);
+        }
+
+        test read {
+            var content = [6]T {0, 0, 0, 0, 0, 0};
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+
+            var buffer = [6]T {1, 2, 3, 4, 5, 6};
+            const handler: [*]u8 = @ptrCast((buffer[0..]).ptr);
+            var stream = std.io.fixedBufferStream(handler[0..6*@sizeOf(T)]);
+            const reader = stream.reader();
+
+            try mat.read(reader);
+            try std.testing.expectEqual(buffer, content);
+        }
+        
+        test scale {
+            var content = [6]T {1, 2, 3, 4, 5, 6};
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+            mat.scale(2);
+            try std.testing.expectEqualSlices(T, &[_]T {
+                2, 4, 6,
+                8, 10, 12,
+            }, mat.data());
+        }
+
+        test addRow {
+
+        }
+
+        test addCol {
+
+        }
     };
 }
 
