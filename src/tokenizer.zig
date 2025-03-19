@@ -1,6 +1,7 @@
 const std = @import("std");
 const parsing = @import("parsing.zig");
 
+
 pub fn Tokenizer() type {
     return struct {
         ids: std.StringHashMap(u32),
@@ -324,11 +325,7 @@ pub fn Tokenizer() type {
             return list;
         }
 
-        pub fn writeToFile(self: *Self, file: std.fs.File) !void {
-            try file.seekTo(0);
-
-            const writer = file.writer();
-
+        pub fn write(self: Self, writer: anytype) !void {
             const elnum = self.tokens.items.len;
             try writer.writeInt(u32, @truncate(elnum), .little);
 
@@ -337,6 +334,13 @@ pub fn Tokenizer() type {
                 try writer.writeByteNTimes(0, max_token_len - token.len);
                 try writer.writeInt(u32, @truncate(i), .little);
             }
+        }
+
+        pub fn writeToFile(self: Self, file: std.fs.File) !void {
+            try file.seekTo(0);
+
+            const writer = file.writer();
+            self.write(writer);
 
             try file.setEndPos(try file.getPos());
         }

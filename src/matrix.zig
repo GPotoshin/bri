@@ -1,0 +1,318 @@
+const std = @import("std");
+
+const AlgebraicError = error {
+    IncompatibleObjects,
+};
+
+/// Matrix for now is intended to be used with arenas, or manually free it's
+/// pointer but there are no checks for double freeing!
+pub fn Matrix(comptime T: type) type {
+    return struct {
+        ptr: [*]T,
+        height: usize,
+        width: usize,
+
+        const Self = @This();
+        pub fn init(allocator: std.mem.Allocator, height: usize, width: usize) !Self {
+            var retval: Self = undefined;
+            try retval.allocate(allocator, height, width);
+            return retval;
+        }
+
+        pub fn allocate(self: *Self, allocator: std.mem.Allocator, height: usize, width: usize) !void {
+            self.ptr = (try allocator.alloc(T, height*width)).ptr;
+            self.height = height;
+            self.width = width;
+        }
+
+        pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.ptr[0..self.height*self.width]);
+            self.height = 0;
+            self.width = 0;
+        }
+
+        /// line-column convention. Not intended for high load. Use direct
+        /// poniter instead! Indencing starts with ZERO
+        pub inline fn at(self: Self, i: usize, j: usize) ?T {
+            if (i > self.height or j > self.width) {
+                return null;
+            }
+            return self.ptr[i*self.width+j];
+        }
+
+        pub inline fn row(self: Self, i: usize) []T {
+            const start = i*self.width;
+            return self.ptr[start..start+self.width];
+        }
+
+        pub inline fn data(self: Self) []T {
+            return self.ptr[0..self.height*self.width];
+        }
+
+        pub inline fn submatrix(self: Self, start: u32, end: u32) ?Self {
+            if (start < 0 or start >= end or end > self.height) {
+                std.debug.print("wrong indices for sub matrix\n", .{});
+                return null;
+            }
+
+            return Matrix(T){
+                .height = end - start,
+                .width = self.width,
+                .ptr = self.ptr + self.width*start,
+            };
+        }
+
+        /// This overwrites with random data with a uniform distribution over
+        /// [-k, k). Parameter k needs to be small as otherwise calculus explods
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            for (0..self.height) |i| {
+                const vec = self.row(i);
+                fillVecRandom(T, rand, vec, k);
+            }
+        }
+
+        pub fn write(self: Self, writer: anytype) !void {
+            const ptr: [*]u8 = @ptrCast(self.ptr);
+            const size: usize = self.height*self.width*@sizeOf(T);
+            _ = try writer.write(ptr[0..size]);
+        }
+
+        pub fn read(self: Self, reader: anytype) !void {
+            const ptr: [*]u8 =  @ptrCast(self.ptr);
+            const size: usize = self.height*self.width*@sizeOf(T);
+            const buffer: []u8 = ptr[0..size];
+            _ = try reader.read(buffer);
+        }
+
+        pub fn print(mat: Self) void {
+            for (0..mat.height) |i| {
+                for (0..mat.width) |j| {
+                    std.debug.print("{}\t", .{mat.at(i,j).?});
+                }
+                std.debug.print("\n", .{});
+            }
+        }
+
+        pub fn matscale(self: *Self, k: T) void {
+            for(0..self.height) |i| {
+                const vec = self.row(i);
+                for(vec) |*v| {
+                    v.* *= k;
+                }
+            }
+        }
+
+        /// adds to each row of mat the vect
+        /// mat: NxM, vec: M
+        pub fn addRow(self: Self, vec: []T) !void {
+            if (self.width != vec.len) {
+                std.debug.print("Incoherent mat and vect sizes!\n", .{});
+                return error.IncompatibleObjects;
+            }
+
+            // dumb implementation
+            for (0..self.height) |i| {
+                for (0..self.width) |j| {
+                    self.ptr[i*self.width+j] += vec[j];
+                }
+            }
+        }
+
+        /// adds to each row of mat the vect
+        /// mat: NxM, vec: M
+        pub fn addCol(self: Self, vec: []T) !void {
+            if (self.height != vec.len) {
+                std.debug.print("Incoherent self and vect sizes!\n", .{});
+                return error.IncompatibleObjects;
+            }
+
+            // dumb implementation
+            for (0..self.height) |i| {
+                for (0..self.width) |j| {
+                    self.ptr[i*self.width+j] += vec[i];
+                }
+            }
+        }
+
+// ---------------------------- TESTS --------------------------------------
+        test init {
+            var mat = try Matrix(T).init(std.testing.allocator, 10, 10);
+            mat.destroy(std.testing.allocator);
+        }
+
+        test allocate {
+            var mat: Matrix(T) = undefined;
+            try mat.allocate(std.testing.allocator, 10, 10);
+            mat.destroy(std.testing.allocator);
+        }
+
+        test at {
+            var content = [_]T{
+                1, 2, 3,
+                4, 5, 6,
+            };
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+            try std.testing.expectEqual(5, mat.at(1,1).?);
+        }
+
+        test row {
+            var content = [_]T {
+                1, 2, 3,
+                4, 5, 6
+            };
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+            try std.testing.expectEqualSlices(T,
+                ([_]T{4, 5, 6})[0..],
+                mat.row(1),
+            );
+        }
+
+        test submatrix {
+            var content = [_]T {
+                1, 2,
+                3, 4,
+                5, 6
+            };
+            const mat = Matrix(T) {
+                .height = 3,
+                .width = 2,
+                .ptr = &content,
+            };
+            const sub = mat.submatrix(0, 2);
+            try std.testing.expectEqualSlices(T, ([_]T {
+                    1, 2,
+                    3, 4,
+                })[0..],
+                sub.?.data(),
+            );
+        }
+
+        test fillRandom {
+            var mat = try Matrix(T).init(std.testing.allocator, 3, 3);
+            var xoshiro = std.Random.Xoshiro256.init(123);
+            const rand = xoshiro.random();
+
+            mat.fillRandom(rand, 1);
+            mat.destroy(std.testing.allocator);
+        }
+
+    };
+}
+
+comptime {
+_ = Matrix(f32);
+}
+
+
+/// computes `(mat1 x mat2^t)^t` because the second argement is trited as an
+/// array of vectors a and vetors are lines in this library. The reason is
+/// memory locality. mat1: MxN, mat2: LxN, out LxM
+pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: Matrix(T)) !void {
+    if (mat1.width != mat2.width) {
+        std.debug.print("Wrong dimensions in product mat1 and mat2\n", .{});
+        return error.IncompatibleObjects; 
+    }
+
+    if (out.width < mat1.height) {
+        std.debug.print("Wrong width in out\n", .{});
+        return error.IncompatibleObjects; 
+    }
+
+    if (out.height < mat2.height) {
+        std.debug.print("Wrong height in out\n", .{});
+        return error.IncompatibleObjects; 
+    }
+
+    for (0..mat2.height) |i| {
+        const vect = mat2.row(i);
+        var out_vect = out.row(i);
+        for (0..mat1.height) |j| {
+            out_vect[j] = 0;
+            for (0..vect.len) |k| {
+                out_vect[j] += mat1.at_nocheck(j, k)*vect[k];
+            }
+        }
+        for (mat1.height..out.width) |j| {
+            out_vect[j] = 0;
+        }
+    }
+    for (mat2.height..out.height) |i| {
+        const vect = out.row(i);
+        for (vect) |*v| {
+            v.* = 0;
+        }
+    }
+}
+
+/// memory for the output should be preallocated and the sizes should be coherent
+/// mat: NxM, input: LxM, vect: N, output: LxN
+pub fn affine(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(T),
+    vect: []T, output: Matrix(T)}) !void {
+    // the sympliest algo
+    // const in_dim: u32 = payload.mat.width;
+    // const out_dim: u32 = payload.mat.height;
+
+    try matprod(T, payload.mat, payload.input, payload.output);
+    try payload.output.addRow(payload.vect);
+}
+
+
+/// memory for the output should be preallocated and the sizes should be coherent
+/// mat: NxM, input: LxM, vect: N, output: LxN
+pub fn affine2(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(T),
+    vect: []T, output: Matrix(T)}) !void {
+    // the sympliest algo
+    // const in_dim: u32 = payload.mat.width;
+    // const out_dim: u32 = payload.mat.height;
+
+    try matprod(T, payload.mat, payload.input, payload.output);
+    try payload.output.addCol(payload.vect);
+}
+
+/// funciton overwrites content of mat and does soft max on every row of mat
+pub fn softmax(comptime T: type, mat: Matrix(T)) void {
+    for (0..mat.height) |i| {
+        const vect = mat.row(i);
+        var sum: T = 0;
+
+        for (vect) |*v| {
+            v.* = @exp(v.*);
+            // std.debug.print("exp: {}\n", .{v.*});
+            sum += v.*;
+        }
+        // std.debug.print("sum: {}\n", .{sum});
+        for (vect) |*v| {
+            v.* = v.*/sum;
+        }
+    }
+
+}
+
+pub fn fillVecRandom(comptime T: type, rand: std.Random, vec: []T, k: T) void {
+    for (vec) |*v| {
+        const f = rand.float(T);
+        v.* = k*(2.0*f - 1.0);
+    }
+}
+
+pub fn readVector(comptime T: type, reader: anytype, vec: []T) !void {
+    const ptr: [*]u8 = @ptrCast(vec.ptr);
+    const size: usize = vec.len*@sizeOf(T);
+    _ = try reader.read(ptr[0..size]);
+}
+
+
+pub fn writeVector(comptime T: type, writer: anytype, vec: []T) !void {
+    const ptr: [*]u8 = @ptrCast(vec.ptr);
+    const size: usize = vec.len*@sizeOf(T);
+    _ = try writer.write(ptr[0..size]);
+}
+

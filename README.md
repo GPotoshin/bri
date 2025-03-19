@@ -8,7 +8,8 @@ If you want, you can join me on this journey or take your own path toward a brig
 However, to train an LLM, we will need some data.
 
 ## Acheivements
-We have the embending layer and tokenizer. As the example the text
+### Tokenizer
+We have the tokenizer. As the example the text
 ```
 The infinite is the answer to all questions. All questions have one answer. And therefore there are not many questions, but only one question. This question is: what is the infinite?
 ```
@@ -16,8 +17,12 @@ is tokenized into
 ```
  the| in|fini|t|e| is| the| answer| to| all| quest|ion|s|.| all| quest|ion|s| have| on|e| answer|.| and| there|for|e| there| are| not| many| quest|ion|s|,| but| only| on|e| quest|ion|.| this| quest|ion| is|:| what| is| the| in|fini|t|e|?|
 ```
+You can take the tokenizer from this porject and repurpose it for your use.
+It has a hash map and odered list of correspondens of tokens and their ids,
+ordinal numbers.
 
 ## Problems
++ hashes of stored files
 + we need to agree on a common style of proofs
 + we need a table of proofs in English -> in Coq
 + we need a working LLM
