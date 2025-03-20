@@ -388,6 +388,59 @@ pub fn Attention(comptime T: type) type {
 
             try att.writeWeights(writer);
             try file.setEndPos(try file.getPos());
+            file.close();
+        }
+
+        test readWeights {
+            const allocator = std.testing.allocator;
+            const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .read_only});
+            const reader = file.reader();
+
+            var header: AttentionHeader = undefined;
+            try header.read(reader);
+
+            var att: Attention(T) = undefined;
+            att.header = header;
+            try att.allocateForHeader(allocator);
+            try att.readWeights(reader);
+
+            var cont1 = [_]T {
+                0, 1,
+                2, 3,
+                4, 5,
+                6, 7,
+                8, 9,
+            };
+            try std.testing.expectEqualSlices(T, &cont1, att.query_matrix.toSlice());
+
+            var cont2 = [_]T {0, 1, 2, 3, 4};
+            try std.testing.expectEqualSlices(T, &cont2, att.query_vect);
+
+            var cont3 = [_]T {
+                0, 1, 2,
+                3, 4, 5,
+                6, 7, 8,
+                9,10,11,
+               12,13,14,
+            };
+            try std.testing.expectEqualSlices(T, &cont3, att.key_matrix.toSlice());
+
+            var cont4 = [_]T {-1, -2, -3, -4, -5};
+            try std.testing.expectEqualSlices(T, &cont4, att.key_vect);
+
+            var cont5 = [_]T {
+                9, 8, 7,
+                6, 5, 4,
+                3, 2, 1,
+                0,-1,-2,
+            };
+            try std.testing.expectEqualSlices(T, &cont5, att.value_matrix.toSlice());
+
+            var cont6 = [_]T {2, 4, 6, 8};
+            try std.testing.expectEqualSlices(T, &cont6, att.value_vect);
+
+            att.destroy(allocator);
+            file.close();
         }
     };
 }

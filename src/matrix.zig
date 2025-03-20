@@ -45,7 +45,7 @@ pub fn Matrix(comptime T: type) type {
             return self.ptr[start..start+self.width];
         }
 
-        pub inline fn data(self: Self) []T {
+        pub inline fn toSlice(self: Self) []T {
             return self.ptr[0..self.height*self.width];
         }
 
@@ -191,7 +191,7 @@ pub fn Matrix(comptime T: type) type {
                 1, 2,
                 3, 4,
             },
-            sub.?.data());
+            sub.?.toSlice());
         }
 
         test fillRandom {
@@ -249,7 +249,7 @@ pub fn Matrix(comptime T: type) type {
             try std.testing.expectEqualSlices(T, &[_]T {
                 2, 4, 6,
                 8, 10, 12,
-            }, mat.data());
+            }, mat.toSlice());
         }
 
         test addRow {
@@ -268,7 +268,7 @@ pub fn Matrix(comptime T: type) type {
                 2, 4, 6,
                 5, 7, 9,
             },
-            mat.data());
+            mat.toSlice());
         }
 
         test addCol {
@@ -287,7 +287,7 @@ pub fn Matrix(comptime T: type) type {
                 2, 3, 4,
                 6, 7, 8,
             },
-            mat.data());
+            mat.toSlice());
         }
     };
 }
