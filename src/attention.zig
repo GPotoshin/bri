@@ -147,7 +147,7 @@ pub fn Attention(comptime T: type) type {
             self.value = try Matrix(T).init(allocator, header.out_dim, header.max_ctx_len);
         }
 
-        pub fn destry(self: *Self, allocator: std.mem.Allocator) !void {
+        pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
             self.query_matrix.destroy(allocator);
             allocator.free(self.query_vect);
             self.query.destroy(allocator);
@@ -156,7 +156,7 @@ pub fn Attention(comptime T: type) type {
             allocator.free(self.key_vect);
             self.key.destroy(allocator);
 
-            self.score.detroy(allocator);
+            self.score.destroy(allocator);
 
             self.value_matrix.destroy(allocator);
             allocator.free(self.value_vect);
@@ -168,7 +168,7 @@ pub fn Attention(comptime T: type) type {
         pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File,
             out: Matrix(T)) !Self {
             file.seekTo(0);
-            var reader = file.reader();
+            const reader = file.reader();
 
             var retval: Self = undefined;
             retval.out = out;
@@ -188,7 +188,7 @@ pub fn Attention(comptime T: type) type {
                     .{self.query_matrix.height, self.query_matrix.width, T});
                 return e;
             };
-            readVector(T, reader, self.query_vect) catch |e| {
+            mtx.readVector(T, reader, self.query_vect) catch |e| {
                 std.debug.print("can't read query vector ({}) {}\n",
                     .{self.query_vect.len, T});
                 return e;
@@ -198,7 +198,7 @@ pub fn Attention(comptime T: type) type {
                     .{self.key_matrix.height, self.key_matrix.width, T});
                 return e;
             };
-            readVector(T, reader, self.key_vect) catch |e| {
+            mtx.readVector(T, reader, self.key_vect) catch |e| {
                 std.debug.print("can't read key vector ({}) {}\n",
                     .{self.key_vect.len, T});
                 return e;
@@ -208,7 +208,7 @@ pub fn Attention(comptime T: type) type {
                     .{self.value_matrix.height, self.value_matrix.width, T});
                 return e;
             };
-            readVector(T, reader, self.value_vect) catch |e| {
+            mtx.readVector(T, reader, self.value_vect) catch |e| {
                 std.debug.print("can't read key vector ({}) {}\n",
                     .{self.value_vect.len, T});
                 return e;
@@ -220,13 +220,13 @@ pub fn Attention(comptime T: type) type {
         pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T),
             comptime mask: enum{bidirectional, unidirectional}) !Matrix(T) {
             
-            try affine(T, .{.mat = self.query_matrix, .input = seq,
+            try mtx.affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = self.query});
-            try affine(T, .{.mat = self.key_matrix, .input = ctx,
+            try mtx.affine(T, .{.mat = self.key_matrix, .input = ctx,
                 .vect = self.key_vect, .output = self.key});
-            try matprod(T, self.key, self.query, self.score);
+            try mtx.matprod(T, self.key, self.query, self.score);
 
-            try affine2(T, .{.mat = ctx, .input = self.value_matrix,
+            try mtx.affine2(T, .{.mat = ctx, .input = self.value_matrix,
                 .vect = self.value_vect, .output = self.value});
 
             if (mask == .unidirectional) {
@@ -237,8 +237,8 @@ pub fn Attention(comptime T: type) type {
                 }
             }
             
-            softmax(T, self.score);
-            try matprod(T, self.value, self.score, self.out);
+            mtx.softmax(T, self.score);
+            try mtx.matprod(T, self.value, self.score, self.out);
 
             return self.out;
         }
@@ -249,7 +249,7 @@ pub fn Attention(comptime T: type) type {
                     .{self.query_matrix.height, self.query_matrix.width, T});
                 return e;
             };
-            writeVector(T, writer, self.query_vect) catch |e| {
+            mtx.writeVector(T, writer, self.query_vect) catch |e| {
                 std.debug.print("can't write query vector ({}) {}\n",
                     .{self.query_vect.len, T});
                 return e;
@@ -259,7 +259,7 @@ pub fn Attention(comptime T: type) type {
                     .{self.key_matrix.height, self.key_matrix.width, T});
                 return e;
             };
-            writeVector(T, writer, self.key_vect) catch |e| {
+            mtx.writeVector(T, writer, self.key_vect) catch |e| {
                 std.debug.print("can't write key vector ({}) {}\n",
                     .{self.key_vect.len, T});
                 return e;
@@ -269,7 +269,7 @@ pub fn Attention(comptime T: type) type {
                     .{self.value_matrix.height, self.value_matrix.width, T});
                 return e;
             };
-            writeVector(T, writer, self.value_vect) catch |e| {
+            mtx.writeVector(T, writer, self.value_vect) catch |e| {
                 std.debug.print("can't write key vector ({}) {}\n",
                     .{self.value_vect.len, T});
                 return e;
@@ -278,11 +278,120 @@ pub fn Attention(comptime T: type) type {
 
         pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
             self.query_matrix.fillRandom(rand, k);
-            fillVecRandom(T, rand, self.query_vect, k);
+            mtx.fillVecRandom(T, rand, self.query_vect, k);
             self.key_matrix.fillRandom(rand, k);
-            fillVecRandom(T, rand, self.key_vect, k);
+            mtx.fillVecRandom(T, rand, self.key_vect, k);
             self.value_matrix.fillRandom(rand, k);
-            fillVecRandom(T, rand, self.value_vect, k);
+            mtx.fillVecRandom(T, rand, self.value_vect, k);
+        }
+
+        test init {
+            const allocator = std.testing.allocator;
+            const header = AttentionHeader {
+                .version = 0,
+                .type_len = @sizeOf(T),
+                .seq_dim = 2,
+                .ctx_dim = 3,
+                .out_dim = 4,
+                .att_dim = 5,
+                .max_ctx_len = 6,
+                .max_seq_len = 7,
+            };
+            var out = try Matrix(T).init(allocator, header.max_seq_len, header.out_dim);
+            var att = try Attention(T).init(allocator, header, out);
+            att.destroy(allocator);
+            out.destroy(allocator);
+        }
+        
+        test allocateForHeader {
+            const allocator = std.testing.allocator;
+            const header = AttentionHeader {
+                .version = 0,
+                .type_len = @sizeOf(T),
+                .seq_dim = 2,
+                .ctx_dim = 3,
+                .out_dim = 4,
+                .att_dim = 5,
+                .max_ctx_len = 6,
+                .max_seq_len = 7,
+            };
+            var out = try Matrix(T).init(allocator, header.max_seq_len, header.out_dim);
+            var att: Attention(f32) = undefined;
+            att.header = header;
+            att.out = out;
+            try att.allocateForHeader(allocator);
+            att.destroy(allocator);
+            out.destroy(allocator);
+        }
+
+        test writeWeights {
+            const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .write_only});
+            const writer = file.writer();
+
+            const header = AttentionHeader {
+                .version = 0,
+                .type_len = @sizeOf(T),
+                .seq_dim = 2,
+                .ctx_dim = 3,
+                .out_dim = 4,
+                .att_dim = 5,
+                .max_ctx_len = 6,
+                .max_seq_len = 7,
+            };
+
+            try header.write(writer);
+
+            var att: Attention(T) = undefined;
+            att.header = header;
+
+            var cont1 = [_]T {
+                0, 1,
+                2, 3,
+                4, 5,
+                6, 7,
+                8, 9,
+            };
+            att.query_matrix.height = header.att_dim;
+            att.query_matrix.width = header.seq_dim;
+            att.query_matrix.ptr = &cont1;
+
+            var cont2 = [_]T {0, 1, 2, 3, 4};
+            att.query_vect = &cont2;
+
+            var cont3 = [_]T {
+                0, 1, 2,
+                3, 4, 5,
+                6, 7, 8,
+                9,10,11,
+               12,13,14,
+            };
+            att.key_matrix.height = header.att_dim;
+            att.key_matrix.width = header.ctx_dim;
+            att.key_matrix.ptr = &cont3;
+
+            var cont4 = [_]T {-1, -2, -3, -4, -5};
+            att.key_vect = &cont4;
+
+            var cont5 = [_]T {
+                9, 8, 7,
+                6, 5, 4,
+                3, 2, 1,
+                0,-1,-2,
+            };
+            att.value_matrix.height = header.out_dim;
+            att.value_matrix.width = header.ctx_dim;
+            att.value_matrix.ptr = &cont5;
+
+            var cont6 = [_]T {2, 4, 6, 8};
+            att.value_vect = &cont6;
+
+
+            try att.writeWeights(writer);
+            try file.setEndPos(try file.getPos());
         }
     };
+}
+
+comptime {
+    _ = Attention(f32);
 }
