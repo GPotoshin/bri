@@ -3,7 +3,7 @@ const mtx = @import("matrix.zig");
 const Matrix = mtx.Matrix;
 
 const AttentionHeader = struct {
-    version: u32,
+    version: u32 = 0,
 
     type_len: u32,
 
@@ -218,7 +218,7 @@ pub fn Attention(comptime T: type) type {
         // this version is tested it does not have division by the dymention
         // because it can be done internaly, by setting correctly the matrix.
         pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T),
-            comptime mask: enum{bidirectional, unidirectional}) !Matrix(T) {
+            comptime mask: enum{bidirectional, unidirectional}) !void {
             
             try mtx.affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = self.query});
@@ -239,8 +239,6 @@ pub fn Attention(comptime T: type) type {
             
             mtx.softmax(T, self.score);
             try mtx.matprod(T, self.value, self.score, self.out);
-
-            return self.out;
         }
 
         pub fn writeWeights(self: Self, writer: anytype) !void {
@@ -316,7 +314,7 @@ pub fn Attention(comptime T: type) type {
                 .max_seq_len = 7,
             };
             var out = try Matrix(T).init(allocator, header.max_seq_len, header.out_dim);
-            var att: Attention(f32) = undefined;
+            var att: Attention(T) = undefined;
             att.header = header;
             att.out = out;
             try att.allocateForHeader(allocator);
@@ -442,9 +440,57 @@ pub fn Attention(comptime T: type) type {
             att.destroy(allocator);
             file.close();
         }
+
+        test calculate {
+            var seq_data = [_]T {
+                1, 1,
+                1,-1,
+                0,-1,
+            };
+            const seq = Matrix(T) {
+                .height = 3,
+                .width = 2,
+                .ptr = &seq_data,
+            };
+
+            var ctx_data = [_]T {
+                1, 2, 3,
+                3, 2, 1,
+            };
+            const ctx = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &ctx_data,
+            };
+
+            const allocator = std.testing.allocator;
+            const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .read_only});
+            const reader = file.reader();
+
+            var att: Attention(T) = undefined;
+            var header: AttentionHeader = undefined;
+            try header.read(reader);
+            att.header = header;
+            try att.allocateForHeader(allocator);
+            defer att.destroy(allocator);
+            try att.readWeights(reader);
+
+            att.out = try Matrix(T).init(allocator, att.header.max_seq_len, att.header.out_dim);
+            defer att.out.destroy(allocator);
+
+            try att.calculate(seq, ctx, .bidirectional);
+
+            try std.testing.expectEqualSlices(T, &[_]T { // hand-calculated
+            1,  6, 11, 16, 21,
+            -1, 0,  1,  2,  3,
+            -1,-2, -3, -4, -5,
+            }, att.query.toSlice()[0..seq.height*att.header.att_dim]);
+
+            file.close();
+        }
     };
 }
 
 comptime {
-    _ = Attention(f32);
+    _ = Attention(f64);
 }
