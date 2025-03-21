@@ -217,17 +217,17 @@ pub fn Attention(comptime T: type) type {
 
         // this version is tested it does not have division by the dymention
         // because it can be done internaly, by setting correctly the matrix.
-        pub fn calculate(self: Self, seq: Matrix(T), ctx: Matrix(T),
+        pub fn calculate(self: *Self, seq: Matrix(T), ctx: Matrix(T),
             comptime mask: enum{bidirectional, unidirectional}) !void {
             
             try mtx.affine(T, .{.mat = self.query_matrix, .input = seq,
-                .vect = self.query_vect, .output = self.query});
+                .vect = self.query_vect, .output = &self.query});
             try mtx.affine(T, .{.mat = self.key_matrix, .input = ctx,
-                .vect = self.key_vect, .output = self.key});
-            try mtx.matprod(T, self.key, self.query, self.score);
+                .vect = self.key_vect, .output = &self.key});
+            try mtx.matprod(T, self.key, self.query, &self.score);
 
             try mtx.affine2(T, .{.mat = ctx, .input = self.value_matrix,
-                .vect = self.value_vect, .output = self.value});
+                .vect = self.value_vect, .output = &self.value});
 
             if (mask == .unidirectional) {
                 for (0..self.score.height) |i| {
@@ -238,7 +238,7 @@ pub fn Attention(comptime T: type) type {
             }
             
             mtx.softmax(T, self.score);
-            try mtx.matprod(T, self.value, self.score, self.out);
+            try mtx.matprod(T, self.value, self.score, &self.out);
         }
 
         pub fn writeWeights(self: Self, writer: anytype) !void {
@@ -448,6 +448,7 @@ pub fn Attention(comptime T: type) type {
                 0,-1,
             };
             const seq = Matrix(T) {
+                .capacity = 6,
                 .height = 3,
                 .width = 2,
                 .ptr = &seq_data,
@@ -457,7 +458,9 @@ pub fn Attention(comptime T: type) type {
                 1, 2, 3,
                 3, 2, 1,
             };
+
             const ctx = Matrix(T) {
+                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &ctx_data,
@@ -475,6 +478,19 @@ pub fn Attention(comptime T: type) type {
             defer att.destroy(allocator);
             try att.readWeights(reader);
 
+
+            std.debug.print("query mat:\n", .{});
+            att.query_matrix.print();
+            std.debug.print("query vec: {any}\n", .{att.query_vect});
+            
+            std.debug.print("key mat:\n", .{});
+            att.key_matrix.print();
+            std.debug.print("key vec: {any}\n", .{att.key_vect});
+
+            std.debug.print("value mat:\n", .{});
+            att.value_matrix.print();
+            std.debug.print("value vec: {any}\n", .{att.value_vect});
+
             att.out = try Matrix(T).init(allocator, att.header.max_seq_len, att.header.out_dim);
             defer att.out.destroy(allocator);
 
@@ -485,6 +501,19 @@ pub fn Attention(comptime T: type) type {
             -1, 0,  1,  2,  3,
             -1,-2, -3, -4, -5,
             }, att.query.toSlice()[0..seq.height*att.header.att_dim]);
+
+            try std.testing.expectEqualSlices(T, &[_]T {
+            7, 24, 41, 58, 75,
+            3, 20, 37, 54, 71,
+            }, att.key.toSlice()[0..ctx.height*att.header.att_dim]);
+
+            // @Todo: add row!!!
+            try std.testing.expectEqualSlices(T, &[_]T {
+            46, 50, 0, 0, 0, 0,
+            28, 32, 0, 0, 0, 0,
+            10, 14, 0, 0, 0, 0,
+            -8, -4, 0, 0, 0, 0,
+            }, att.value.toSlice());
 
             file.close();
         }

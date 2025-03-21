@@ -1,7 +1,6 @@
 const std = @import("std");
 const parsing = @import("parsing.zig");
 
-
 pub fn Tokenizer() type {
     return struct {
         ids: std.StringHashMap(u32),
