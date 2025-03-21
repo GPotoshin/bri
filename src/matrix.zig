@@ -385,13 +385,6 @@ pub fn affine2(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(
     // const out_dim: u32 = payload.mat.height;
 
     try matprod(T, payload.mat, payload.input, payload.output);
-    std.debug.print("From affine2:\n", .{});
-    std.debug.print("mat:\n", .{});
-    payload.mat.print();
-    std.debug.print("input:\n", .{});
-    payload.input.print();
-    std.debug.print("output:\n", .{});
-    payload.output.print();
 
     try payload.output.addCol(payload.vect);
 }
