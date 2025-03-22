@@ -1,4 +1,7 @@
-usingnamespace @import("attention.zig");
+const std = @import("std");
+const att = @import("attention.zig");
+const mtx = @import("matrix.zig");
+const Matrix = mtx.Matrix;
 
 const MHAttentionHeader = struct {
     version: u32,
@@ -117,9 +120,9 @@ pub fn MHAttention(comptime T: type) type {
     return struct {
         header: MHAttentionHeader,
 
-        attention: []Attention(T),
-        att_results: Matrix(T),
-        comb_matrix: Matrix(T),
+        attentions: []att.Attention(T),
+        att_results: mtx.Matrix(T),
+        comb_matrix: mtx.Matrix(T),
         comb_vect: []T,
 
 
@@ -137,11 +140,11 @@ pub fn MHAttention(comptime T: type) type {
 
             retval.header = header;
 
-            retval.attention = try allocator.alloc(T, hyper_param.heads);
+            retval.attentions = try allocator.alloc(T, hyper_param.heads);
             retval.att_results = try Matrix(T).init(allocator, hyper_param.max_seq_len
                 * hyper_param.heads, hyper_param.mid_dim);
             for (0..hyper_param.heads) |i| {
-                retval.attention[i] = try Attention(T).init(allocator, .{
+                retval.attentions[i] = try Attention(T).init(allocator, .{
                     .version = 0,
                     .type_len = @sizeOf(T),
                     .seq_dim = hyper_param.seq_dim,
@@ -164,15 +167,33 @@ pub fn MHAttention(comptime T: type) type {
         }
 
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
-            self.attention = try allocator.alloc(Attention(T), header);
-            for (self.attention) |*att| {
-                att.header = self.header.toAttentionHeader();
-                try att.allocateForHeader(allocator);
+            self.attentions = try allocator.alloc(att.Attention(T), header);
+            for (self.attentions) |*a| {
+                a.header = self.header.toAttentionHeader();
+                try a.allocateForHeader(allocator);
             }
-            self.att_results = try Matrix(T).init(allocator, self.header.heads*self.header.mid_dim
+            self.att_results = try Matrix(T).init(allocator, self.header.heads *
+                self.header.max_seq_len, self.header.mid_dim);
             self.comb_matrix = try Matrix(T).init(allocator, self.header.out_dim,
                 self.header.heads*self.header.mid_dim);
-            self.comb_vect = try  allocator.alloc(T, self.header.out_dim);
+            self.comb_vect = try allocator.alloc(T, self.header.out_dim);
+        }
+
+        pub fn readWeights(self: *Self, reader: anytype) !void {
+            for (self.attentions) |*a| {
+                a.readWeights(reader) catch |e| {
+                    std.debug.print("Can't read an attetion block\n", .{});
+                    return e;
+                };
+            }
+            self.comb_matrix.read(reader) catch |e| {
+                std.debug.print("Can't read combination matrix\n" ,{});
+                return e;
+            };
+            mtx.readVector(T, reader, self.comb_vect) catch |e| {
+                std.debug.print("Can't read combination vector\n", .{});
+                return e;
+            };
         }
 
         pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
@@ -181,7 +202,7 @@ pub fn MHAttention(comptime T: type) type {
             var retval: Self = undefined;
             retval.header.read(reader);
             retval.allocateForHeader(allocator);
-
+            retval.readWeights(reader);
         }
     };
 }
