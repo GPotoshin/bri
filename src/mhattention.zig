@@ -224,11 +224,12 @@ pub fn MHAttention(comptime T: type) type {
             };
         }
 
-        pub fn fillRandom(self: Self, rand: std.Random, k: T) !void {
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
             for (self.attentions) |a| {
                 a.fillRandom(rand, k);
             }
             self.comb_matrix.fillRandom(rand, k);
+            mtx.fillVecRandom(T, rand, self.comb_vect, k);
         }
 
         pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
@@ -248,8 +249,8 @@ pub fn MHAttention(comptime T: type) type {
             try file.setEndPos(try file.getPos());
         }
 
-        const testData = .{
-            .header = MHAttentionHeader {
+        const testData = struct {
+            const header = MHAttentionHeader {
                 .version = 0,
                 .type_len = @sizeOf(T),
                 .heads = 4,
@@ -260,7 +261,102 @@ pub fn MHAttention(comptime T: type) type {
                 .out_dim = 1024,
                 .max_seq_len = 1024,
                 .max_ctx_len = 1024,
-            },
+            };
+
+            var comb_mat_data = [_]T {
+                0.1, 0.2, 0.3, 0.4,
+                0.1, 0.2, 0.3, 0.4,
+                0.1, 0.2, 0.3, 0.4,
+                0.1, 0.2, 0.3, 0.4,
+                0.1, 0.2, 0.3, 0.4,
+
+                0.3, 0.2, 0.1, 0.4,
+                0.3, 0.2, 0.1, 0.4,
+                0.3, 0.2, 0.1, 0.4,
+                0.3, 0.2, 0.1, 0.4,
+                0.3, 0.2, 0.1, 0.4,
+
+                0.9, 0.2, 0.1, 0.4,
+                0.9, 0.2, 0.1, 0.4,
+                0.9, 0.2, 0.1, 0.7,
+                0.3, 0.2, 0.1, 0.7,
+                0.3, 0.2, 0.1, 0.7,
+
+                0.9, 0.2, 0.1, 0.4,
+                0.9, 0.5, 0.6, 0.4,
+                0.9, 0.5, 0.1, 0.7,
+                0.3, 0.5, 0.1, 0.7,
+                0.3, 0.2, 0.8, 0.7,
+            };
+
+            var att_res_data: [7*4*4]T = undefined;
+            var com_vec_data = [5]T {0.1, -0.1, 0, 0.2, -0.2};
+            var out_data: [5*7] = undefined;
+            
+            var att: Attention(T) = undefined;
+            att.header = TestingData.header.toAttetntionHeader();
+
+            att.query_matrix.height = TestingData.header.att_dim;
+            att.query_matrix.width = TestingData.header.seq_dim;
+            att.query_matrix.ptr = &TestingData.cont1;
+
+            att.query_vect = &TestingData.cont2;
+
+            att.key_matrix.height = TestingData.header.att_dim;
+            att.key_matrix.width = TestingData.header.ctx_dim;
+            att.key_matrix.ptr = &TestingData.cont3;
+
+            att.key_vect = &TestingData.cont4;
+
+            att.value_matrix.height = TestingData.header.out_dim;
+            att.value_matrix.width = TestingData.header.ctx_dim;
+            att.value_matrix.ptr = &TestingData.cont5;
+
+            att.value_vect = &TestingData.cont6;
+
+            var mid_data [4][4*7]T = undefined;
+
+            pub const mhatt = MHAttention(T) {
+                .header = .{
+                    .version = 0,
+                    .type_len = @sizeOf(T),
+                    .heads = 4,
+                    .seq_dim = 1,
+                    .ctx_dim = 2,
+                    .att_dim = 3,
+                    .mid_dim = 4,
+                    .out_dim = 5,
+                    .max_seq_len = 7,
+                    .max_ctx_len = 8,
+                },
+
+                .attentions = ?[_]Attention(T) {att, att, att, att},
+                .att_results = Matrix(T) {
+                    .capacity = s,
+                    .height = 7*4,
+                    .width = 4,
+                    .ptr = &att_res_data,
+                },
+                .comb_matrix = Matrix(T) {
+                    .capacity = 5*4*4,
+                    .height = 5*4,
+                    .width = 4,
+                    .ptr = &comb_mat_data,
+                },
+                .comb_vect = &com_vec_data,
+
+
+                .out = Matrix(T){
+                    .capacity = out_data.len,
+                    .height = 7,
+                    .width = 5,
+                    .ptr = &out_data,
+                },
+            };
+            
+            for (mhatt.attentions, mid_data) |*a, *d| {
+                a.out = d;
+            }
         };
 
         test allocateForHeader {
@@ -278,6 +374,27 @@ pub fn MHAttention(comptime T: type) type {
             var mhatt = try init(allocator, testData.header, out);
             mhatt.destroy(allocator);
             out.destroy(allocator);
+        }
+
+        test fillRandom {
+            const allocator = std.testing.allocator;
+            var xoshiro = std.Random.Xoshiro256.init(123);
+            const rand = xoshiro.random();
+            var out = try Matrix(T).init(allocator, testData.header.max_seq_len,
+                testData.header.out_dim);
+            defer out.destroy(allocator);
+            var mhatt = try init(allocator, testData.header, out);
+            defer mhatt.destroy(allocator);
+
+            mhatt.fillRandom(rand, 0.1);
+        }
+
+        test writeWeights {
+            const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .write_only});
+            const writer = file.writer();
+
+            try TestingData.header.write(writer);
+            
         }
     };
 }
