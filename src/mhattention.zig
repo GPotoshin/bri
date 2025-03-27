@@ -262,6 +262,18 @@ pub fn MHAttention(comptime T: type) type {
                 .max_seq_len = 1024,
                 .max_ctx_len = 1024,
             };
+            const header2 = MHAttentionHeader {
+                .version = 0,
+                .type_len = @sizeOf(T),
+                .heads = 4,
+                .seq_dim = 1,
+                .ctx_dim = 2,
+                .att_dim = 3,
+                .mid_dim = 4,
+                .out_dim = 5,
+                .max_seq_len = 7,
+                .max_ctx_len = 8,
+            };
 
             var comb_mat_data = [_]T {
                 0.1, 0.2, 0.3, 0.4,
@@ -291,48 +303,73 @@ pub fn MHAttention(comptime T: type) type {
 
             var att_res_data: [7*4*4]T = undefined;
             var com_vec_data = [5]T {0.1, -0.1, 0, 0.2, -0.2};
-            var out_data: [5*7] = undefined;
+            pub var out_data: [5*7]T = undefined;
+
+            pub var cont1 = [_]T {
+                0,
+                2,
+                4,
+            };
+            pub var cont2 = [_]T {0, 1, 2};
+            pub var cont3 = [_]T {
+                0, 1,
+                3, 4,
+                6, 7,
+            };
+            var cont4 = [_]T {-1, -2, -3};
+            var cont5 = [_]T {
+                9, 8, 
+                6, 5, 
+                3, 2, 
+                0,-1,
+            };
+            var cont6 = [_]T {2, 4, 6, 8};
             
-            var att: Attention(T) = undefined;
-            att.header = TestingData.header.toAttetntionHeader();
+            const atten = Attention(T) {
+                    .header = header2.toAttentionHeader(),
+                    .query_matrix = Matrix(T) {
+                        .capacity = header.att_dim*header.seq_dim,
+                        .height = header.att_dim,
+                        .width = header.seq_dim,
+                        .ptr = &cont1,
+                    },
 
-            att.query_matrix.height = TestingData.header.att_dim;
-            att.query_matrix.width = TestingData.header.seq_dim;
-            att.query_matrix.ptr = &TestingData.cont1;
+                    .query_vect = &cont2,
 
-            att.query_vect = &TestingData.cont2;
+                    .key_matrix = Matrix(T) {
+                        .capacity = header.att_dim*header.ctx_dim,
+                        .height = header.att_dim,
+                        .width = header.ctx_dim,
+                        .ptr = &cont3,
+                    },
 
-            att.key_matrix.height = TestingData.header.att_dim;
-            att.key_matrix.width = TestingData.header.ctx_dim;
-            att.key_matrix.ptr = &TestingData.cont3;
+                    .key_vect = &cont4,
 
-            att.key_vect = &TestingData.cont4;
+                    .value_matrix = Matrix(T) {
+                        .capacity = header.out_dim*header.ctx_dim,
+                        .height = header.mid_dim,
+                        .width = header.ctx_dim,
+                        .ptr = &cont5,
+                    },
 
-            att.value_matrix.height = TestingData.header.out_dim;
-            att.value_matrix.width = TestingData.header.ctx_dim;
-            att.value_matrix.ptr = &TestingData.cont5;
+                    .value_vect = &cont6,
 
-            att.value_vect = &TestingData.cont6;
+                    .key = undefined,
+                    .value = undefined,
+                    .query = undefined,
+                    .score = undefined,
+                    .out = undefined,
+            };
 
-            var mid_data [4][4*7]T = undefined;
+            var mid_data: [4][4*7]T = undefined;
+            var attentions = [4]Attention(T) {atten, atten, atten, atten};
 
             pub const mhatt = MHAttention(T) {
-                .header = .{
-                    .version = 0,
-                    .type_len = @sizeOf(T),
-                    .heads = 4,
-                    .seq_dim = 1,
-                    .ctx_dim = 2,
-                    .att_dim = 3,
-                    .mid_dim = 4,
-                    .out_dim = 5,
-                    .max_seq_len = 7,
-                    .max_ctx_len = 8,
-                },
+                .header = header2,
 
-                .attentions = ?[_]Attention(T) {att, att, att, att},
+                .attentions = &attentions,
                 .att_results = Matrix(T) {
-                    .capacity = s,
+                    .capacity = 7*4*4,
                     .height = 7*4,
                     .width = 4,
                     .ptr = &att_res_data,
@@ -354,9 +391,6 @@ pub fn MHAttention(comptime T: type) type {
                 },
             };
             
-            for (mhatt.attentions, mid_data) |*a, *d| {
-                a.out = d;
-            }
         };
 
         test allocateForHeader {
@@ -391,10 +425,17 @@ pub fn MHAttention(comptime T: type) type {
 
         test writeWeights {
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .write_only});
+            defer file.close();
             const writer = file.writer();
 
-            try TestingData.header.write(writer);
-            
+            var mhatt = testData.mhatt;
+            try mhatt.header.write(writer);
+            try mhatt.writeWeights(writer);
+            for (mhatt.attentions, &testData.mid_data) |*a, *d| {
+                a.out.ptr = d;
+                a.out.capacity = 28;
+            }
+            try file.setEndPos(try file.getPos());
         }
     };
 }

@@ -319,27 +319,6 @@ pub fn Attention(comptime T: type) type {
                 0,-1,-2,
             };
             var cont6 = [_]T {2, 4, 6, 8};
-
-            var att: Attention(T) = undefined;
-            att.header = TestingData.header;
-
-            att.query_matrix.height = TestingData.header.att_dim;
-            att.query_matrix.width = TestingData.header.seq_dim;
-            att.query_matrix.ptr = &TestingData.cont1;
-
-            att.query_vect = &TestingData.cont2;
-
-            att.key_matrix.height = TestingData.header.att_dim;
-            att.key_matrix.width = TestingData.header.ctx_dim;
-            att.key_matrix.ptr = &TestingData.cont3;
-
-            att.key_vect = &TestingData.cont4;
-
-            att.value_matrix.height = TestingData.header.out_dim;
-            att.value_matrix.width = TestingData.header.ctx_dim;
-            att.value_matrix.ptr = &TestingData.cont5;
-
-            att.value_vect = &TestingData.cont6;
         };
 
         test init {
@@ -370,18 +349,21 @@ pub fn Attention(comptime T: type) type {
             var att: Attention(T) = undefined;
             att.header = TestingData.header;
 
+            att.query_matrix.capacity = TestingData.header.att_dim*TestingData.header.seq_dim;
             att.query_matrix.height = TestingData.header.att_dim;
             att.query_matrix.width = TestingData.header.seq_dim;
             att.query_matrix.ptr = &TestingData.cont1;
 
             att.query_vect = &TestingData.cont2;
 
+            att.key_matrix.capacity = TestingData.header.att_dim*TestingData.header.ctx_dim;
             att.key_matrix.height = TestingData.header.att_dim;
             att.key_matrix.width = TestingData.header.ctx_dim;
             att.key_matrix.ptr = &TestingData.cont3;
 
             att.key_vect = &TestingData.cont4;
 
+            att.value_matrix.capacity = TestingData.header.out_dim*TestingData.header.ctx_dim;
             att.value_matrix.height = TestingData.header.out_dim;
             att.value_matrix.width = TestingData.header.ctx_dim;
             att.value_matrix.ptr = &TestingData.cont5;
