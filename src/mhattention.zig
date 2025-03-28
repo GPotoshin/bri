@@ -115,6 +115,32 @@ const MHAttentionHeader = struct {
             .max_ctx_len = self.max_ctx_len,
         };
     }
+
+    test toAttentionHeader {
+        const mhheader = MHAttentionHeader {
+            .version = 0,
+            .type_len = 1,
+            .heads = 2,
+            .seq_dim = 3,
+            .ctx_dim = 4,
+            .att_dim = 5,
+            .mid_dim = 6,
+            .out_dim = 7,
+            .max_seq_len = 8,
+            .max_ctx_len = 9,
+        };
+        const header = mhheader.toAttentionHeader();
+        try std.testing.expectEqualDeep(att.AttentionHeader {
+            .version = 0,
+            .type_len = 1,
+            .seq_dim = 3,
+            .ctx_dim = 4,
+            .att_dim = 5,
+            .out_dim = 6,
+            .max_seq_len = 8,
+            .max_ctx_len = 9,
+        }, header);
+    }
 };
 
 pub fn MHAttention(comptime T: type) type {
@@ -262,7 +288,7 @@ pub fn MHAttention(comptime T: type) type {
                 .max_seq_len = 1024,
                 .max_ctx_len = 1024,
             };
-            const header2 = MHAttentionHeader {
+            pub const header2 = MHAttentionHeader {
                 .version = 0,
                 .type_len = @sizeOf(T),
                 .heads = 4,
@@ -437,6 +463,43 @@ pub fn MHAttention(comptime T: type) type {
             try mhatt.header.write(writer);
             try mhatt.writeWeights(writer);
             try file.setEndPos(try file.getPos());
+        }
+
+        test readWeights {
+            const allocator = std.testing.allocator;
+
+            const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
+            defer file.close();
+            const reader = file.reader();
+            
+            var mhatt: MHAttention(T) = undefined;
+            try mhatt.header.read(reader);
+            try mhatt.allocateForHeader(allocator);
+            defer mhatt.destroy(allocator);
+            try mhatt.readWeights(reader);
+
+
+            // testing header data
+            try std.testing.expectEqualDeep(testData.header2, mhatt.header);
+            try std.testing.expectEqualDeep(testData.header2.toAttentionHeader(), mhatt.attentions[2].header);
+
+            // testing wights data
+            try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
+                &testData.cont1);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
+                &testData.cont2);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
+                &testData.cont3);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
+                &testData.cont4);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
+                &testData.cont5);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
+                &testData.cont6);
+            try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
+                &testData.comb_mat_data);
+            try std.testing.expectEqualSlices(T, mhatt.comb_vect,
+                &testData.com_vec_data);
         }
     };
 }
