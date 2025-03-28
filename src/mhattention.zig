@@ -19,86 +19,86 @@ const MHAttentionHeader = struct {
     const Self = @This();
     pub fn write(self: Self, writer: anytype) !void {
         writer.writeInt(u32, self.version, .little) catch |e| {
-            std.debug.print("Can't write version\n", .{});
+            std.log.err("Can't write version\n", .{});
             return e;
         };
         writer.writeInt(u32, self.type_len, .little) catch |e| {
-            std.debug.print("Can't write type_size\n", .{});
+            std.log.err("Can't write type_size\n", .{});
             return e;
         };
         writer.writeInt(u32, self.heads, .little) catch |e| {
-            std.debug.print("Can't write heads\n", .{});
+            std.log.err("Can't write heads\n", .{});
             return e;
         };
         writer.writeInt(u32, self.seq_dim, .little) catch |e| {
-            std.debug.print("Can't write seq_dim\n", .{});
+            std.log.err("Can't write seq_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.ctx_dim, .little) catch |e| {
-            std.debug.print("Can't write ctx_dim\n", .{});
+            std.log.err("Can't write ctx_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.att_dim, .little) catch |e| {
-            std.debug.print("Can't write att_dim\n", .{});
+            std.log.err("Can't write att_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.mid_dim, .little) catch |e| {
-            std.debug.print("Can't write mid_dim\n", .{});
+            std.log.err("Can't write mid_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.out_dim, .little) catch |e| {
-            std.debug.print("Can't write out_dim\n", .{});
+            std.log.err("Can't write out_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.max_seq_len, .little) catch |e| {
-            std.debug.print("Can't write max_seq_len\n", .{});
+            std.log.err("Can't write max_seq_len\n", .{});
             return e;
         };
         writer.writeInt(u32, self.max_ctx_len, .little) catch |e| {
-            std.debug.print("Can't write seq_dim\n", .{});
+            std.log.err("Can't write seq_dim\n", .{});
             return e;
         };
     }
 
     pub fn read(self: *Self, reader: anytype) !void {
         self.version = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read version\n", .{});
+            std.log.err("Can't read version\n", .{});
             return e;
         };
         self.type_len = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read type\n", .{});
+            std.log.err("Can't read type\n", .{});
             return e;
         };
         self.heads = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read heads\n", .{});
+            std.log.err("Can't read heads\n", .{});
             return e;
         };
         self.seq_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read seq_dim\n", .{});
+            std.log.err("Can't read seq_dim\n", .{});
             return e;
         };
         self.ctx_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read ctx_dim\n", .{});
+            std.log.err("Can't read ctx_dim\n", .{});
             return e;
         };
         self.att_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read att_dim\n", .{});
+            std.log.err("Can't read att_dim\n", .{});
             return e;
         };
         self.mid_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read mid_dim\n", .{});
+            std.log.err("Can't read mid_dim\n", .{});
             return e;
         };
         self.out_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read out_dim\n", .{});
+            std.log.err("Can't read out_dim\n", .{});
             return e;
         };
         self.max_seq_len = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read max_seq_len\n", .{});
+            std.log.err("Can't read max_seq_len\n", .{});
             return e;
         };
         self.max_ctx_len = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read max_ctx_len\n", .{});
+            std.log.err("Can't read max_ctx_len\n", .{});
             return e;
         };
     }
@@ -135,7 +135,7 @@ pub fn MHAttention(comptime T: type) type {
 
             // maybe change the number of parameters passed?
             if (out.height != header.max_seq_len or out.width != header.out_dim) {
-                std.debug.print("Wrong dimensions for output matrix for MHAttension\n", .{});
+                std.log.err("Wrong dimensions for output matrix for MHAttension\n", .{});
                 return error.DataConflict;
             }
 
@@ -193,16 +193,16 @@ pub fn MHAttention(comptime T: type) type {
         pub fn readWeights(self: *Self, reader: anytype) !void {
             for (self.attentions) |*a| {
                 a.readWeights(reader) catch |e| {
-                    std.debug.print("Can't read an attetion block\n", .{});
+                    std.log.err("Can't read an attetion block\n", .{});
                     return e;
                 };
             }
             self.comb_matrix.read(reader) catch |e| {
-                std.debug.print("Can't read combination matrix\n" ,{});
+                std.log.err("Can't read combination matrix\n", .{});
                 return e;
             };
             mtx.readVector(T, reader, self.comb_vect) catch |e| {
-                std.debug.print("Can't read combination vector\n", .{});
+                std.log.err("Can't read combination vector\n", .{});
                 return e;
             };
         }
@@ -210,16 +210,16 @@ pub fn MHAttention(comptime T: type) type {
         pub fn writeWeights(self: *Self, writer: anytype) !void {
             for (self.attentions) |*a| {
                 a.writeWeights(writer) catch |e| {
-                    std.debug.print("Can't write an attetion block\n", .{});
+                    std.log.err("Can't write an attetion block\n", .{});
                     return e;
                 };
             }
             self.comb_matrix.write(writer) catch |e| {
-                std.debug.print("Can't write combination matrix\n" ,{});
+                std.log.err("Can't write combination matrix\n", .{});
                 return e;
             };
             mtx.writeVector(T, writer, self.comb_vect) catch |e| {
-                std.debug.print("Can't write combination vector\n", .{});
+                std.log.err("Can't write combination vector\n", .{});
                 return e;
             };
         }
@@ -328,27 +328,27 @@ pub fn MHAttention(comptime T: type) type {
             const atten = Attention(T) {
                     .header = header2.toAttentionHeader(),
                     .query_matrix = Matrix(T) {
-                        .capacity = header.att_dim*header.seq_dim,
-                        .height = header.att_dim,
-                        .width = header.seq_dim,
+                        .capacity = header2.att_dim*header2.seq_dim,
+                        .height = header2.att_dim,
+                        .width = header2.seq_dim,
                         .ptr = &cont1,
                     },
 
                     .query_vect = &cont2,
 
                     .key_matrix = Matrix(T) {
-                        .capacity = header.att_dim*header.ctx_dim,
-                        .height = header.att_dim,
-                        .width = header.ctx_dim,
+                        .capacity = header2.att_dim*header2.ctx_dim,
+                        .height = header2.att_dim,
+                        .width = header2.ctx_dim,
                         .ptr = &cont3,
                     },
 
                     .key_vect = &cont4,
 
                     .value_matrix = Matrix(T) {
-                        .capacity = header.out_dim*header.ctx_dim,
-                        .height = header.mid_dim,
-                        .width = header.ctx_dim,
+                        .capacity = header2.out_dim*header2.ctx_dim,
+                        .height = header2.mid_dim,
+                        .width = header2.ctx_dim,
                         .ptr = &cont5,
                     },
 
@@ -429,12 +429,13 @@ pub fn MHAttention(comptime T: type) type {
             const writer = file.writer();
 
             var mhatt = testData.mhatt;
-            try mhatt.header.write(writer);
-            try mhatt.writeWeights(writer);
             for (mhatt.attentions, &testData.mid_data) |*a, *d| {
                 a.out.ptr = d;
                 a.out.capacity = 28;
             }
+
+            try mhatt.header.write(writer);
+            try mhatt.writeWeights(writer);
             try file.setEndPos(try file.getPos());
         }
     };

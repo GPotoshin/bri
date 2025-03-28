@@ -19,70 +19,70 @@ pub const AttentionHeader = struct {
     const Self = @This();
     pub fn write(self: Self, writer: anytype) !void {
         writer.writeInt(u32, self.version, .little) catch |e| {
-            std.debug.print("Can't write version to a file\n", .{});
+            std.log.err("Can't write version to a file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.type_len, .little) catch |e| {
-            std.debug.print("Can't write type_size to a file\n", .{});
+            std.log.err("Can't write type_size to a file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.seq_dim, .little) catch |e| {
-            std.debug.print("Can't write seq_dim from file\n", .{});
+            std.log.err("Can't write seq_dim from file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.ctx_dim, .little) catch |e| {
-            std.debug.print("Can't write ctx_dim from file\n", .{});
+            std.log.err("Can't write ctx_dim from file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.att_dim, .little) catch |e| {
-            std.debug.print("Can't write att_dim from file\n", .{});
+            std.log.err("Can't write att_dim from file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.out_dim, .little) catch |e| {
-            std.debug.print("Can't write out_dim from file\n", .{});
+            std.log.err("Can't write out_dim from file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.max_seq_len, .little) catch |e| {
-            std.debug.print("Can't write max_seq_len from file\n", .{});
+            std.log.err("Can't write max_seq_len from file\n", .{});
             return e;
         };
         writer.writeInt(u32, self.max_ctx_len, .little) catch |e| {
-            std.debug.print("Can't write seq_dim from file\n", .{});
+            std.log.err("Can't write seq_dim from file\n", .{});
             return e;
         };
     }
 
     pub fn read(self: *Self, reader: anytype) !void {
         self.version = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read version\n", .{});
+            std.log.err("Can't read version\n", .{});
             return e;
         };
         self.type_len = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read type\n", .{});
+            std.log.err("Can't read type\n", .{});
             return e;
         };
         self.seq_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read seq_dim\n", .{});
+            std.log.err("Can't read seq_dim\n", .{});
             return e;
         };
         self.ctx_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read ctx_dim\n", .{});
+            std.log.err("Can't read ctx_dim\n", .{});
             return e;
         };
         self.att_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read att_dim\n", .{});
+            std.log.err("Can't read att_dim\n", .{});
             return e;
         };
         self.out_dim = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read out_dim\n", .{});
+            std.log.err("Can't read out_dim\n", .{});
             return e;
         };
         self.max_seq_len = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read max_seq_len\n", .{});
+            std.log.err("Can't read max_seq_len\n", .{});
             return e;
         };
         self.max_ctx_len = reader.readInt(u32, .little) catch |e| {
-            std.debug.print("Can't read max_ctx_len\n", .{});
+            std.log.err("Can't read max_ctx_len\n", .{});
             return e;
         };
     }
@@ -117,7 +117,7 @@ pub fn Attention(comptime T: type) type {
         /// the output matrix should preallocated by caller
         pub fn init(allocator: std.mem.Allocator, header: AttentionHeader, out: Matrix(T)) !Self {
             if (out.height != header.max_seq_len or out.width != header.out_dim) {
-                std.debug.print("Output matrix is of a wrong size\n", .{});
+                std.log.err("Output matrix is of a wrong size\n", .{});
                 return error.DataConflict;
             }
 
@@ -184,32 +184,32 @@ pub fn Attention(comptime T: type) type {
         /// memory for weights sould be preallocated
         pub fn readWeights(self: *Self, reader: anytype) !void {
             self.query_matrix.read(reader) catch |e| {
-                std.debug.print("can't read query matrix ({}x{}) {}\n",
+                std.log.err("can't read query matrix ({}x{}) {}\n",
                     .{self.query_matrix.height, self.query_matrix.width, T});
                 return e;
             };
             mtx.readVector(T, reader, self.query_vect) catch |e| {
-                std.debug.print("can't read query vector ({}) {}\n",
+                std.log.err("can't read query vector ({}) {}\n",
                     .{self.query_vect.len, T});
                 return e;
             };
             self.key_matrix.read(reader) catch |e| {
-                std.debug.print("can't read key matrix ({}x{}) {}\n",
+                std.log.err("can't read key matrix ({}x{}) {}\n",
                     .{self.key_matrix.height, self.key_matrix.width, T});
                 return e;
             };
             mtx.readVector(T, reader, self.key_vect) catch |e| {
-                std.debug.print("can't read key vector ({}) {}\n",
+                std.log.err("can't read key vector ({}) {}\n",
                     .{self.key_vect.len, T});
                 return e;
             };
             self.value_matrix.read(reader) catch |e| {
-                std.debug.print("can't read value matrix ({}x{}) {}\n",
+                std.log.err("can't read value matrix ({}x{}) {}\n",
                     .{self.value_matrix.height, self.value_matrix.width, T});
                 return e;
             };
             mtx.readVector(T, reader, self.value_vect) catch |e| {
-                std.debug.print("can't read key vector ({}) {}\n",
+                std.log.err("can't read key vector ({}) {}\n",
                     .{self.value_vect.len, T});
                 return e;
             };
@@ -245,32 +245,32 @@ pub fn Attention(comptime T: type) type {
 
         pub fn writeWeights(self: Self, writer: anytype) !void {
             self.query_matrix.write(writer) catch |e| {
-                std.debug.print("can't write query matrix ({}x{}) {}\n",
+                std.log.err("can't write query matrix ({}x{}) {}\n",
                     .{self.query_matrix.height, self.query_matrix.width, T});
                 return e;
             };
             mtx.writeVector(T, writer, self.query_vect) catch |e| {
-                std.debug.print("can't write query vector ({}) {}\n",
+                std.log.err("can't write query vector ({}) {}\n",
                     .{self.query_vect.len, T});
                 return e;
             };
             self.key_matrix.write(writer) catch |e| {
-                std.debug.print("can't write key matrix ({}x{}) {}\n",
+                std.log.err("can't write key matrix ({}x{}) {}\n",
                     .{self.key_matrix.height, self.key_matrix.width, T});
                 return e;
             };
             mtx.writeVector(T, writer, self.key_vect) catch |e| {
-                std.debug.print("can't write key vector ({}) {}\n",
+                std.log.err("can't write key vector ({}) {}\n",
                     .{self.key_vect.len, T});
                 return e;
             };
             self.value_matrix.write(writer) catch |e| {
-                std.debug.print("can't write value matrix ({}x{}) {}\n",
+                std.log.err("can't write value matrix ({}x{}) {}\n",
                     .{self.value_matrix.height, self.value_matrix.width, T});
                 return e;
             };
             mtx.writeVector(T, writer, self.value_vect) catch |e| {
-                std.debug.print("can't write key vector ({}) {}\n",
+                std.log.err("can't write key vector ({}) {}\n",
                     .{self.value_vect.len, T});
                 return e;
             };
@@ -534,5 +534,5 @@ pub fn Attention(comptime T: type) type {
 }
 
 comptime {
-    _ = Attention(f64);
+    _ = Attention(f32);
 }

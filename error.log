@@ -1,0 +1,35 @@
+1/28 mhattention.MHAttention(f32).decltest.allocateForHeader...OK
+2/28 mhattention.MHAttention(f32).decltest.init...OK
+3/28 mhattention.MHAttention(f32).decltest.fillRandom...OK
+4/28 mhattention.MHAttention(f32).decltest.writeWeights...thread 2429531 panic: reached unreachable code
+/nix/store/csjx3aam31ibs849ignpl12my475w0yk-zig-0.13.0/lib/zig/std/posix.zig:1223:23: 0x10462b23b in write (test)
+            .FAULT => unreachable,
+                      ^
+/nix/store/csjx3aam31ibs849ignpl12my475w0yk-zig-0.13.0/lib/zig/std/fs/File.zig:1281:23: 0x10461ea2f in write (test)
+    return posix.write(self.handle, bytes);
+                      ^
+/nix/store/csjx3aam31ibs849ignpl12my475w0yk-zig-0.13.0/lib/zig/std/io.zig:316:27: 0x10461e953 in write__anon_3761 (test)
+            return writeFn(self.context, bytes);
+                          ^
+/Users/giorno/projects/bri/src/attention.zig:247:36: 0x10461ecab in writeWeights__anon_3760 (test)
+            self.query_matrix.write(writer) catch |e| {
+                                   ^
+/Users/giorno/projects/bri/src/mhattention.zig:212:31: 0x10461f103 in writeWeights__anon_3759 (test)
+                a.writeWeights(writer) catch |e| {
+                              ^
+/Users/giorno/projects/bri/src/mhattention.zig:438:35: 0x10461f477 in decltest.writeWeights (test)
+            try mhatt.writeWeights(writer);
+                                  ^
+/nix/store/csjx3aam31ibs849ignpl12my475w0yk-zig-0.13.0/lib/zig/compiler/test_runner.zig:157:25: 0x104626663 in mainTerminal (test)
+        if (test_fn.func()) |_| {
+                        ^
+/nix/store/csjx3aam31ibs849ignpl12my475w0yk-zig-0.13.0/lib/zig/compiler/test_runner.zig:37:28: 0x104618db7 in main (test)
+        return mainTerminal();
+                           ^
+/nix/store/csjx3aam31ibs849ignpl12my475w0yk-zig-0.13.0/lib/zig/std/start.zig:514:22: 0x104618983 in main (test)
+            root.main();
+                     ^
+???:?:?: 0x19193a0df in ??? (???)
+???:?:?: 0x6b45ffffffffffff in ??? (???)
+error: the following test command crashed:
+/Users/giorno/projects/bri/.zig-cache/o/6dccb8ad0e3e1b60d544fa019b78e27c/test

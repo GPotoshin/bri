@@ -63,7 +63,7 @@ pub fn Matrix(comptime T: type) type {
         // 
         pub inline fn submatrix(self: Self, start: u32, end: u32) ?Self {
             if (start < 0 or start >= end or end > self.height) {
-                std.debug.print("wrong indices for sub matrix\n", .{});
+                std.log.err("wrong indices for sub matrix\n", .{});
                 return null;
             }
 
@@ -106,9 +106,9 @@ pub fn Matrix(comptime T: type) type {
         pub fn print(mat: Self) void {
             for (0..mat.height) |i| {
                 for (0..mat.width) |j| {
-                    std.debug.print("{}\t", .{mat.at(i,j).?});
+                    std.log.info("{}\t", .{mat.at(i,j).?});
                 }
-                std.debug.print("\n", .{});
+                std.log.info("\n", .{});
             }
         }
 
@@ -125,7 +125,7 @@ pub fn Matrix(comptime T: type) type {
         /// mat: NxM, vec: M
         pub fn addRow(self: Self, vec: []T) !void {
             if (self.width != vec.len) {
-                std.debug.print("Incoherent mat and vect sizes!\n", .{});
+                std.log.err("Incoherent mat and vect sizes!\n", .{});
                 return error.IncompatibleObjects;
             }
 
@@ -141,7 +141,7 @@ pub fn Matrix(comptime T: type) type {
         /// mat: NxM, vec: M
         pub fn addCol(self: Self, vec: []T) !void {
             if (self.height != vec.len) { // @Rq: maybe do < or just to max
-                std.debug.print("Incoherent self and vect sizes!\n", .{});
+                std.log.err("Incoherent self and vect sizes!\n", .{});
                 return error.IncompatibleObjects;
             }
 
@@ -329,12 +329,12 @@ _ = Matrix(f32);
 /// memory locality. mat1: MxN, mat2: LxN, out LxM
 pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: *Matrix(T)) !void {
     if (mat1.width != mat2.width) {
-        std.debug.print("Wrong dimensions in product mat1 and mat2\n", .{});
+        std.log.err("Wrong dimensions in product mat1 and mat2\n", .{});
         return error.IncompatibleObjects; 
     }
 
     if (out.capacity < mat1.height*mat2.height) {
-        std.debug.print("Can't store the output\n", .{});
+        std.log.err("Can't store the output\n", .{});
         return error.OutOfBound; 
     }
 
@@ -397,10 +397,8 @@ pub fn softmax(comptime T: type, mat: Matrix(T)) void {
 
         for (vect) |*v| {
             v.* = @exp(v.*);
-            // std.debug.print("exp: {}\n", .{v.*});
             sum += v.*;
         }
-        // std.debug.print("sum: {}\n", .{sum});
         for (vect) |*v| {
             v.* = v.*/sum;
         }
