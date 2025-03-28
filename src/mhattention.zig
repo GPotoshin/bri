@@ -184,8 +184,8 @@ pub fn MHAttention(comptime T: type) type {
                 );
             }
 
-            retval.comb_matrix = try Matrix(T).init(allocator, header.out_dim,
-                header.mid_dim*header.heads);
+            retval.comb_matrix = try Matrix(T).init(allocator, header.out_dim*header.heads,
+                header.mid_dim);
             retval.comb_vect = try allocator.alloc(T, header.out_dim);
             retval.out = out;
 
@@ -204,8 +204,8 @@ pub fn MHAttention(comptime T: type) type {
                 a.out = self.att_results.submatrix(@truncate(i*a.header.max_seq_len),
                     @truncate((i+1)*a.header.max_seq_len)).?;
             }
-            self.comb_matrix = try Matrix(T).init(allocator, self.header.out_dim,
-                self.header.heads*self.header.mid_dim);
+            self.comb_matrix = try Matrix(T).init(allocator, self.header.out_dim*self.header.heads,
+                self.header.mid_dim);
             self.comb_vect = try allocator.alloc(T, self.header.out_dim);
         }
 
@@ -261,6 +261,7 @@ pub fn MHAttention(comptime T: type) type {
             mtx.fillVecRandom(T, rand, self.comb_vect, k);
         }
 
+        /// Do not forget to set out matrix
         pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Self {
             try file.seekTo(0);
             const reader = file.reader();
@@ -273,25 +274,31 @@ pub fn MHAttention(comptime T: type) type {
 
         // @AddThreads
         pub fn calculate(self: *Self, seq: Matrix(T), ctx: Matrix(T),
-            comptime mask: enum{bidirectional, unidirectional}) !void {
+            comptime mask: att.Mask) !void {
 
             @memset(self.out.toSlice(), 0);
             // Check that the out matrix is the right one
-            const transform_size = self.header.mid_dim*self.header.out_dim;
-            const data_size = self.header.max_seq_len*self.header.mid_dim;
+            // remove multiplication
+            const transform_size = self.header.out_dim;
+            const data_size = self.header.max_seq_len;
+            if (seq.height > self.header.max_seq_len or ctx.height > self.header.max_ctx_len) {
+                std.log.err("Input is too long!\n", .{});
+                return error.IncompatibleObjects;
+            }
             for (self.attentions, 0..) |*a, i| {
-                a.calculate(seq, ctx, mask);
+                try a.calculate(seq, ctx, mask); // do we set out correctly?
                 const start_transform: u32 = @truncate(transform_size*i);
                 const end_transform: u32 = @truncate(transform_size*(i+1));
                 const transform = self.comb_matrix.submatrix(start_transform, end_transform).?;
 
                 const start_data: u32 = @truncate(data_size*i);
                 const end_data: u32 = @truncate(data_size*(i+1));
-                const data = self.att_results.submatrix(start_data, end_data).?;
+                var data = self.att_results.submatrix(start_data, end_data).?;
+                data.height = seq.height;
 
-                mtx.mataddprod(T, transform, data, self.out);
+                try mtx.mataddprod(T, transform, data, &self.out);
             }
-            self.out.addRow(self.comb_vect);
+            try self.out.addRow(self.comb_vect);
         }
 
         // @Tests
@@ -561,6 +568,10 @@ pub fn MHAttention(comptime T: type) type {
             defer file.close();
             var mhatt = try MHAttention(T).initFromFile(allocator, file);
             defer mhatt.destroy(allocator);
+            var out = try Matrix(T).init(allocator, mhatt.header.max_seq_len,
+                mhatt.header.out_dim);
+            defer out.destroy(allocator);
+            mhatt.out = out;
 
             var seq_data = [_]T { 0.1, 0.3, 0.2, 0.4 };
             var ctx_data = [_]T { 0.1, 0.3, 0.2, 0.4, 0.3, 0.4, 0.0, -0.1 };
@@ -579,6 +590,28 @@ pub fn MHAttention(comptime T: type) type {
             };
 
             try mhatt.calculate(seq, ctx, .bidirectional);
+
+            // right results
+            try std.testing.expect(@abs(mhatt.out.toSlice()[0]-39.63546734) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[1]-45.51779338) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[2]-46.37794993) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[3]-37.45404993) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[4]-40.09511809) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[5]-39.9070572) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[6]-45.82308028) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[7]-46.6671428) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[8]-37.6305832) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[9]-40.27416612) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[10]-39.78800458) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[11]-45.68924128) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[12]-46.54031778) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[13]-37.55304782) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[14]-40.19549336) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[15]-40.00224998) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[16]-45.93011503) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[17]-46.7686183) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[18]-37.69276302) < 0.00001);
+            try std.testing.expect(@abs(mhatt.out.toSlice()[19]-40.33729753) < 0.00001);
         }
     };
 }

@@ -88,6 +88,7 @@ pub const AttentionHeader = struct {
     }
 };
 
+pub const Mask = enum{ bidirectional, unidirectional };
 
 // @Todo: actually as calculus are happenning on gpu, in the future
 // intermediate memory should be allocated for gpu!
@@ -218,7 +219,7 @@ pub fn Attention(comptime T: type) type {
         // this version is tested it does not have division by the dymention
         // because it can be done internaly, by setting correctly the matrix.
         pub fn calculate(self: *Self, seq: Matrix(T), ctx: Matrix(T),
-            comptime mask: enum{bidirectional, unidirectional}) !void {
+            comptime mask: Mask) !void {
             
             try mtx.affine(T, .{.mat = self.query_matrix, .input = seq,
                 .vect = self.query_vect, .output = &self.query});

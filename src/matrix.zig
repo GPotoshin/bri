@@ -106,9 +106,9 @@ pub fn Matrix(comptime T: type) type {
         pub fn print(mat: Self) void {
             for (0..mat.height) |i| {
                 for (0..mat.width) |j| {
-                    std.log.info("{}\t", .{mat.at(i,j).?});
+                    std.debug.print("{}\t", .{mat.at(i,j).?});
                 }
-                std.log.info("\n", .{});
+                std.debug.print("\n", .{});
             }
         }
 
