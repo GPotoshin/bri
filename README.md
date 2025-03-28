@@ -35,6 +35,12 @@ You can take the tokeniser from this porject and repurpose it for your use.
 It has a hash map and an odered list of correspondens of tokens and their ids,
 ordinal numbers.
 
+### Attention
+We have a prototype of attention algorithm
+
+### MHAttention
+We have a prototype of mhattention algorithm
+
 ## Tests
 Most funcitons are covered by tests, so you can see how they work by looking at
 those examples.
