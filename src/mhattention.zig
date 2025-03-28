@@ -152,7 +152,6 @@ pub fn MHAttention(comptime T: type) type {
         comb_matrix: Matrix(T),
         comb_vect: []T,
 
-
         out: Matrix(T),
 
         const Self = @This();
@@ -201,6 +200,10 @@ pub fn MHAttention(comptime T: type) type {
             }
             self.att_results = try Matrix(T).init(allocator, self.header.heads *
                 self.header.max_seq_len, self.header.mid_dim);
+            for (self.attentions, 0..) |*a, i| {
+                a.out = self.att_results.submatrix(@truncate(i*a.header.max_seq_len),
+                    @truncate((i+1)*a.header.max_seq_len)).?;
+            }
             self.comb_matrix = try Matrix(T).init(allocator, self.header.out_dim,
                 self.header.heads*self.header.mid_dim);
             self.comb_vect = try allocator.alloc(T, self.header.out_dim);
@@ -262,19 +265,36 @@ pub fn MHAttention(comptime T: type) type {
             try file.seekTo(0);
             const reader = file.reader();
             var retval: Self = undefined;
-            retval.header.read(reader);
-            retval.allocateForHeader(allocator);
-            retval.readWeights(reader);
+            try retval.header.read(reader);
+            try retval.allocateForHeader(allocator);
+            try retval.readWeights(reader);
+            return retval;
         }
 
-        pub fn writeToFile(self: Self, file: std.fs.File) !void {
-            try file.seekTo(0);
-            const writer = file.writer();
-            self.header.write(writer);
-            self.writeWeights(writer);
-            try file.setEndPos(try file.getPos());
+        // @AddThreads
+        pub fn calculate(self: *Self, seq: Matrix(T), ctx: Matrix(T),
+            comptime mask: enum{bidirectional, unidirectional}) !void {
+
+            @memset(self.out.toSlice(), 0);
+            // Check that the out matrix is the right one
+            const transform_size = self.header.mid_dim*self.header.out_dim;
+            const data_size = self.header.max_seq_len*self.header.mid_dim;
+            for (self.attentions, 0..) |*a, i| {
+                a.calculate(seq, ctx, mask);
+                const start_transform: u32 = @truncate(transform_size*i);
+                const end_transform: u32 = @truncate(transform_size*(i+1));
+                const transform = self.comb_matrix.submatrix(start_transform, end_transform).?;
+
+                const start_data: u32 = @truncate(data_size*i);
+                const end_data: u32 = @truncate(data_size*(i+1));
+                const data = self.att_results.submatrix(start_data, end_data).?;
+
+                mtx.mataddprod(T, transform, data, self.out);
+            }
+            self.out.addRow(self.comb_vect);
         }
 
+        // @Tests
         const testData = struct {
             const header = MHAttentionHeader {
                 .version = 0,
@@ -477,6 +497,38 @@ pub fn MHAttention(comptime T: type) type {
             try mhatt.allocateForHeader(allocator);
             defer mhatt.destroy(allocator);
             try mhatt.readWeights(reader);
+
+
+            // testing header data
+            try std.testing.expectEqualDeep(testData.header2, mhatt.header);
+            try std.testing.expectEqualDeep(testData.header2.toAttentionHeader(), mhatt.attentions[2].header);
+
+            // testing wights data
+            try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
+                &testData.cont1);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
+                &testData.cont2);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
+                &testData.cont3);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
+                &testData.cont4);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
+                &testData.cont5);
+            try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
+                &testData.cont6);
+            try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
+                &testData.comb_mat_data);
+            try std.testing.expectEqualSlices(T, mhatt.comb_vect,
+                &testData.com_vec_data);
+        }
+
+        test initFromFile {
+            const allocator = std.testing.allocator;
+
+            const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
+            defer file.close();
+            var mhatt = try MHAttention(T).initFromFile(allocator, file);
+            defer mhatt.destroy(allocator);
 
 
             // testing header data

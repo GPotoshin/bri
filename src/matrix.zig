@@ -363,6 +363,34 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: *Matrix(
     }
 }
 
+/// computes `(mat1 x mat2^t)^t` and adds it to the out. Can't be used in parallel.
+/// mat1: MxN, mat2: LxN, out LxM
+pub fn mataddprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: *Matrix(T)) !void { // @Testit
+    if (mat1.width != mat2.width) {
+        std.log.err("Wrong dimensions in product mat1 and mat2\n", .{});
+        return error.IncompatibleObjects; 
+    }
+
+    if (out.capacity < mat1.height*mat2.height) {
+        std.log.err("Can't store the output\n", .{});
+        return error.OutOfBound; 
+    }
+
+    out.width = mat1.height;
+    out.height = mat2.height;
+
+    for (0..mat2.height) |i| {
+        const vect = mat2.row(i);
+        var out_vect = out.row(i);
+        for (0..mat1.height) |j| {
+            const vect2 = mat1.row(j);
+            for (0..vect.len) |k| {
+                out_vect[j] += vect2[k]*vect[k];
+            }
+        }
+    }
+}
+
 /// memory for the output should be preallocated and the sizes should be coherent
 /// mat: NxM, input: LxM, vect: N, output: LxN
 pub fn affine(comptime T: type, payload: struct {mat: Matrix(T), input: Matrix(T),
