@@ -553,6 +553,33 @@ pub fn MHAttention(comptime T: type) type {
             try std.testing.expectEqualSlices(T, mhatt.comb_vect,
                 &testData.com_vec_data);
         }
+
+        test calculate {
+            const allocator = std.testing.allocator;
+
+            const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
+            defer file.close();
+            var mhatt = try MHAttention(T).initFromFile(allocator, file);
+            defer mhatt.destroy(allocator);
+
+            var seq_data = [_]T { 0.1, 0.3, 0.2, 0.4 };
+            var ctx_data = [_]T { 0.1, 0.3, 0.2, 0.4, 0.3, 0.4, 0.0, -0.1 };
+
+            const seq = Matrix(T) {
+                .capacity = 4,
+                .height = 4,
+                .width = 1,
+                .ptr = &seq_data,
+            };
+            const ctx = Matrix(T) {
+                .capacity = 8,
+                .height = 4,
+                .width = 2,
+                .ptr = &ctx_data,
+            };
+
+            try mhatt.calculate(seq, ctx, .bidirectional);
+        }
     };
 }
 
