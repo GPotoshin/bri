@@ -153,6 +153,12 @@ pub fn Matrix(comptime T: type) type {
             }
         }
 
+        pub fn reLU(self: Self) void {
+            for (self.toSlice) |*e| {
+                e.* = @max(0, e.*);
+            }
+        }
+
 // ---------------------------- TESTS --------------------------------------
         test init {
             var mat = try Matrix(T).init(std.testing.allocator, 10, 10);

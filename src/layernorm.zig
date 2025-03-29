@@ -8,10 +8,9 @@ pub fn LayerNorm(comptime T: type) type {
         gamma: []T,
         beta: []T,
 
-
         const Self = @This();
         pub fn apply(self: Self, mat: Matrix(T)) void {
-            const dim: T = @floatFromInt(mat.height);
+            const dim: T = @floatFromInt(mat.width);
             for (0..mat.height) |i| {
                 const row = mat.row(i);
                 var mean: T = 0;
@@ -20,6 +19,7 @@ pub fn LayerNorm(comptime T: type) type {
                     mean += e;
                 }
                 mean /= dim;
+
                 for (row) |*e| {
                     e.* -= mean;
                 }
@@ -39,6 +39,28 @@ pub fn LayerNorm(comptime T: type) type {
                     e.* = e.* * g + b; 
                 }
             }
+        }
+
+        pub fn writeWeights(self: Self, writer: anytype) !void {
+            mtx.writeVector(T, writer, self.gamma) catch |e| {
+                std.log.err("Can't write gamma vector\n", .{});
+                return e;
+            };
+            mtx.writeVector(T, writer, self.beta) catch |e| {
+                std.log.err("Can't write beta vector\n", .{});
+                return e;
+            };
+        }
+
+        pub fn readWeights(self: Self, reader: anytype) !void {
+            mtx.readVector(T, reader, self.gamma) catch |e| {
+                std.log.err("Can't read gamma vector\n", .{});
+                return e;
+            };
+            mtx.readVector(T, reader, self.beta) catch |e| {
+                std.log.err("Can't read beta vector\n", .{});
+                return e;
+            };
         }
 
         test apply {
@@ -64,7 +86,15 @@ pub fn LayerNorm(comptime T: type) type {
 
             layer.apply(mat);
 
-            mat.print();
+            try std.testing.expect(@abs(mat.ptr[0]-1.658359214)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[1]-2.447213595)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[2]-4)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[3]-14.41640786)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[4]-3.140028008)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[5]-0.7397479244)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[6]-4)<0.00001); 
+            try std.testing.expect(@abs(mat.ptr[7]-2.400280084)<0.00001); 
+
         }
     };
 }
