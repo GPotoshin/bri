@@ -66,6 +66,7 @@ pub const MultilayerPreceptronHeader = struct {
     }
 };
 
+// @NotTested
 // only 2 layers for now
 pub fn MultilayerPreceptron(comptime T: type) type {
     return struct {

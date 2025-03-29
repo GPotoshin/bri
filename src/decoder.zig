@@ -9,26 +9,30 @@ const MHAttention = mhatt.MHAttention;
 const LayerNorm = ln.LayerNorm;
 const MultilayerPreceptron = mlp.MultilayerPreceptron;
 
-pub fn EncodeLayer(comptime T: type) type {
+pub fn DecodeLayer(comptime T: type) type {
     return struct {
-        mhattention: MHAttention(T),
+        mhattention1: MHAttention(T),
         layer_norm1: LayerNorm(T),
-        preceptrom: MultilayerPreceptron(T),
+        mhattention2: MHAttention(T),
         layer_norm2: LayerNorm(T),
+        preceptrom: MultilayerPreceptron(T),
+        layer_norm3: LayerNorm(T),
 
         const Self = @This();
-        pub fn compute(self: Self, seq: Matrix(T)) !void {
-            try self.mhattention.calculate(seq, seq, .bidirectional);   
+        pub fn compute(self: Self, seq: Matrix(T), ctx: Matrix(T)) !void {
+            try self.mhattention1.calculate(seq, seq, .unidirectional);   
             try self.layer_norm1.apply(seq);
-            try self.preceptrom.calculate(seq); // outputs should be set to them selfs
+            try self.mhattention1.calculate(seq, ctx, .bidirectional);   
             try self.layer_norm2.apply(seq);
+            try self.preceptrom.calculate(seq); // outputs should be set to them selfs
+            try self.layer_norm3.apply(seq);
         }
     };
 }
 
-pub fn Encoder(comptime T: type) type {
+pub fn Decoder(comptime T: type) type {
     return struct {
-        layers: []EncodeLayer(T),
+        layers: []DecodeLayer(T),
 
         const Self = @This();
         pub fn compute(self: Self, seq: Matrix(T)) !void {
