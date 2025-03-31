@@ -80,11 +80,11 @@ pub fn MultilayerPreceptron(comptime T: type) type {
         out: Matrix(T),
         
         const Self = @This();
-        pub fn calculate(self: Self, input: Matrix(T)) !void {
-            try mtx.matprod(T, self.mat1, input, self.mid);
+        pub fn compute(self: *Self, input: Matrix(T)) !void {
+            try mtx.matprod(T, self.mat1, input, &self.mid);
             try self.mid.addRow(self.vec1);
             self.mid.reLU();
-            try mtx.matprod(T, self.mat2, self.mid, self.out);
+            try mtx.matprod(T, self.mat2, self.mid, &self.out);
             try self.out.addRow(self.vec2);
         } 
 
@@ -149,7 +149,88 @@ pub fn MultilayerPreceptron(comptime T: type) type {
                     .{self.vec2.len, T});
                 return e;
             };
+        }
 
+        test compute {
+            var data1 = [_]T {
+                1, 2, 3,
+                -1, 2, -3,
+            };
+
+            var vdata1 = [_]T { 0.1, -0.1 };
+
+            var data2 = [_]T {
+                0.1, 0.4,
+                0.3, -0.2,
+                0.5, -0.1,
+            };
+            var vdata2 = [_]T { 0.3, -0.2, 0.0};
+            var outdata: [30]T = undefined;
+            var middata: [20]T = undefined;
+
+            var mlp = MultilayerPreceptron(T) {
+                .header = MultilayerPreceptronHeader {
+                    .version = 0,
+                    .type_len = @sizeOf(T),
+                    .in_dim = 3,
+                    .mid_dim = 2,
+                    .out_dim = 3,
+                    .max_seq_len = 10,
+                },
+
+                .mat1 = Matrix(T) {
+                    .capacity = 6,
+                    .height = 2,
+                    .width = 3,
+                    .ptr = &data1,
+                },
+                .mat2 = Matrix(T) {
+                    .capacity = 6,
+                    .height = 3,
+                    .width = 2,
+                    .ptr = &data2,
+                },
+                .vec1 = &vdata1,
+                .vec2 = &vdata2,
+
+                .mid = Matrix(T) {
+                    .capacity = middata.len,
+                    .height = 0,
+                    .width = 0,
+                    .ptr = &middata,
+                },
+
+                .out = Matrix(T) {
+                    .capacity = outdata.len,
+                    .height = 0,
+                    .width = 0,
+                    .ptr = &outdata,
+                },
+            };
+
+            var testdata = [_]T {
+                9, 8,  7,
+                -1, -2, -3,
+            };
+            const testseq = Matrix(T) {
+                .capacity = 6,
+                .height = 2,
+                .width = 3,
+                .ptr = &testdata,
+            };
+
+            try mlp.compute(testseq);
+
+            try std.testing.expect(@abs(mlp.out.ptr[0]-4.91) < 0.000001);
+            try std.testing.expect(@abs(mlp.out.ptr[1]-13.63) < 0.000001);
+            try std.testing.expect(@abs(mlp.out.ptr[2]-23.05) < 0.000001);
+            try std.testing.expect(@abs(mlp.out.ptr[3]-2.66) < 0.000001);
+            try std.testing.expect(@abs(mlp.out.ptr[4]-(-1.38)) < 0.000001);
+            try std.testing.expect(@abs(mlp.out.ptr[5]-(-0.59)) < 0.000001);
         }
     };
+}
+
+comptime {
+    _ = MultilayerPreceptron(f32);
 }

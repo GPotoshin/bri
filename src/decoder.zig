@@ -19,7 +19,7 @@ pub fn DecodeLayer(comptime T: type) type {
         layer_norm3: LayerNorm(T),
 
         const Self = @This();
-        pub fn compute(self: Self, seq: Matrix(T), ctx: Matrix(T)) !void {
+        pub fn compute(self: Self, ctx: Matrix(T), seq: Matrix(T)) !void {
             try self.mhattention1.calculate(seq, seq, .unidirectional);   
             try self.layer_norm1.apply(seq);
             try self.mhattention1.calculate(seq, ctx, .bidirectional);   
@@ -35,9 +35,9 @@ pub fn Decoder(comptime T: type) type {
         layers: []DecodeLayer(T),
 
         const Self = @This();
-        pub fn compute(self: Self, seq: Matrix(T)) !void {
+        pub fn compute(self: Self, ctx: Matrix(T), seq: Matrix(T)) !void {
             for (self.layers) |layer| {
-                layer.compute(seq);
+                layer.compute(ctx, seq);
             }
         }
     };

@@ -218,7 +218,7 @@ pub fn Attention(comptime T: type) type {
 
         // this version is tested it does not have division by the dymention
         // because it can be done internaly, by setting correctly the matrix.
-        pub fn calculate(self: *Self, seq: Matrix(T), ctx: Matrix(T),
+        pub fn compute(self: *Self, ctx: Matrix(T), seq: Matrix(T),
             comptime mask: Mask) !void {
             
             try mtx.affine(T, .{.mat = self.query_matrix, .input = seq,
@@ -434,7 +434,7 @@ pub fn Attention(comptime T: type) type {
             file.close();
         }
 
-        test calculate {
+        test compute {
             var seq_data = [_]T {
                 1, 1,
                 1,-1,
@@ -474,7 +474,7 @@ pub fn Attention(comptime T: type) type {
             att.out = try Matrix(T).init(allocator, att.header.max_seq_len, att.header.out_dim);
             defer att.out.destroy(allocator);
 
-            try att.calculate(seq, ctx, .bidirectional);
+            try att.compute(ctx, seq, .bidirectional);
 
             try std.testing.expectEqualSlices(T, &[_]T { // hand-calculated
                 1,  6, 11, 16, 21,

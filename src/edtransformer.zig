@@ -1,19 +1,24 @@
 /// seq2seq transformer
 const std = @import("std");
 const parsing = @import("parsing.zig");
-const mhatt = @import("mhattention.zig");
-const MHAttention = mhatt.MHAttention;
+const enc = @import("encoder.zig");
+const dec = @import("decoder.zig");
+const mtx = @import("matrix.zig");
 
-// is that a good idea?
+const Encoder = enc.Encoder;
+const Decoder = dec.Decoder;
+const Matrix = mtx.Matrix;
 
 
 pub fn EDTransformer(comptime T: type) type {
     return struct {
-        mhatt1: MHAttention(T),
+        encoder: Encoder(T),
+        decoder: Decoder(T),
 
         const Self = @This();
 
-        pub fn calculate(self: Self) void {
+        pub fn calculate(self: Self, ctx: Matrix(T), seq: Matrix(T)) void {
+            try self.encoder.compute(ctx);
             
 
 

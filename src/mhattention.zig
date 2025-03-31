@@ -273,8 +273,7 @@ pub fn MHAttention(comptime T: type) type {
         }
 
         // @AddThreads
-        pub fn calculate(self: *Self, seq: Matrix(T), ctx: Matrix(T),
-            comptime mask: att.Mask) !void {
+        pub fn compute(self: *Self, ctx: Matrix(T), seq: Matrix(T), comptime mask: att.Mask) !void {
 
             @memset(self.out.toSlice(), 0);
             // Check that the out matrix is the right one
@@ -286,7 +285,7 @@ pub fn MHAttention(comptime T: type) type {
                 return error.IncompatibleObjects;
             }
             for (self.attentions, 0..) |*a, i| {
-                try a.calculate(seq, ctx, mask); // do we set out correctly?
+                try a.compute(ctx, seq, mask); // do we set out correctly?
                 const start_transform: u32 = @truncate(transform_size*i);
                 const end_transform: u32 = @truncate(transform_size*(i+1));
                 const transform = self.comb_matrix.submatrix(start_transform, end_transform).?;
@@ -561,7 +560,7 @@ pub fn MHAttention(comptime T: type) type {
                 &testData.com_vec_data);
         }
 
-        test calculate {
+        test compute {
             const allocator = std.testing.allocator;
 
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
@@ -589,7 +588,7 @@ pub fn MHAttention(comptime T: type) type {
                 .ptr = &ctx_data,
             };
 
-            try mhatt.calculate(seq, ctx, .bidirectional);
+            try mhatt.compute(ctx, seq, .bidirectional);
 
             // right results
             try std.testing.expect(@abs(mhatt.out.toSlice()[0]-39.63546734) < 0.00001);

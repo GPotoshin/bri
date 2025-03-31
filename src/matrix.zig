@@ -154,7 +154,7 @@ pub fn Matrix(comptime T: type) type {
         }
 
         pub fn reLU(self: Self) void {
-            for (self.toSlice) |*e| {
+            for (self.toSlice()) |*e| {
                 e.* = @max(0, e.*);
             }
         }
