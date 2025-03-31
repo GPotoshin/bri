@@ -80,6 +80,7 @@ pub fn MultilayerPreceptron(comptime T: type) type {
         out: Matrix(T),
         
         const Self = @This();
+
         pub fn compute(self: *Self, input: Matrix(T)) !void {
             try mtx.matprod(T, self.mat1, input, &self.mid);
             try self.mid.addRow(self.vec1);
@@ -125,7 +126,6 @@ pub fn MultilayerPreceptron(comptime T: type) type {
                     .{self.vec2.len, T});
                 return e;
             };
-
         }
 
         pub fn writeWeights(self: Self, writer: anytype) !void {

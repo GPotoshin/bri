@@ -15,6 +15,22 @@ In the future the tokeniser will be factorised out and will be managed by a
 special tool. Most functionality is done, but I am debugging the attentinon block
 as it's hard to get all the calculations right and clean.
 
+## Matrices
+Every matrix is represented as consequent in memry rows that can also represent an
+array of vectors and the matrix multiplication is done with the convention line
+by line instead of classical line by column. I suspect that this approach should
+run as fast as block by block multiplication on GPU and CPU and we can avoid
+usage of transpositions.
+
+## Structure
+The code is devided in compute blocks, that are structures with weights, memory
+for caculus and methodes. Each compute block either `computes` by writing the
+result matrix to out field or `applys` by overiting the field. As the prototype
+is designed for CPU, I favoire `apply` methode where it's possible. Never the
+less sometimes we can set the out field to the input value in such case there
+will be 2 methods.
+
+
 ## Acheivements
 ### Tokeniser
 We have a tokeniser. As the example a text

@@ -13,15 +13,29 @@ pub fn EncodeLayer(comptime T: type) type {
     return struct {
         mhattention: MHAttention(T),
         layer_norm1: LayerNorm(T),
-        preceptrom: MultilayerPreceptron(T),
+        preceptron: MultilayerPreceptron(T),
         layer_norm2: LayerNorm(T),
 
         const Self = @This();
         pub fn compute(self: Self, seq: Matrix(T)) !void {
-            try self.mhattention.calculate(seq, seq, .bidirectional);   
+            try self.mhattention.compute(seq, seq, .bidirectional);   
             try self.layer_norm1.apply(seq);
-            try self.preceptrom.calculate(seq); // outputs should be set to them selfs
+            try self.preceptron.compute(seq); // outputs should be set to them selfs
             try self.layer_norm2.apply(seq);
+        }
+
+        pub fn writeWeights(self: Self, writer: anytype) !void {
+            try self.mhattention.writeWeights(writer);
+            try self.layer_norm1.writeWeights(writer);
+            try self.preceptron.writeWeights(writer);
+            try self.layer_norm1.writeWeights(writer);
+        }
+
+        pub fn readWeights(self: Self, reader: anytype) !void {
+            try self.mhattention.readWeights(reader);
+            try self.layer_norm1.readWeights(reader);
+            try self.preceptron.readWeights(reader);
+            try self.layer_norm1.readWeights(reader);
         }
     };
 }
