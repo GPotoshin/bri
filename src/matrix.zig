@@ -9,7 +9,7 @@ const AlgebraicError = error {
 /// pointer but there are no checks for double freeing!
 pub fn Matrix(comptime T: type) type {
     return struct {
-        ptr: [*]T,
+        ptr: ?[*]T,
         capacity: usize,
         height: usize,
         width: usize,
@@ -35,7 +35,7 @@ pub fn Matrix(comptime T: type) type {
         }
 
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.ptr[0..self.capacity]);
+            allocator.free(self.ptr.?[0..self.capacity]);
             self.capacity = 0;
             self.height = 0;
             self.width = 0;
@@ -47,17 +47,17 @@ pub fn Matrix(comptime T: type) type {
             if (i > self.height or j > self.width) {
                 return null;
             }
-            return self.ptr[i*self.width+j];
+            return self.ptr.?[i*self.width+j];
         }
 
         pub inline fn row(self: Self, i: usize) []T {
             const start = i*self.width;
-            return self.ptr[start..start+self.width];
+            return self.ptr.?[start..start+self.width];
         }
 
         /// returns the slice of size of matrix, not its capacity
         pub inline fn toSlice(self: Self) []T {
-            return self.ptr[0..self.height*self.width];
+            return self.ptr.?[0..self.height*self.width];
         }
 
         // 
@@ -71,7 +71,7 @@ pub fn Matrix(comptime T: type) type {
                 .capacity = self.width*(end - start),
                 .height = end - start,
                 .width = self.width,
-                .ptr = self.ptr + self.width*start,
+                .ptr = self.ptr.? + self.width*start,
             };
         }
 
@@ -132,7 +132,7 @@ pub fn Matrix(comptime T: type) type {
             // dumb implementation
             for (0..self.height) |i| {
                 for (0..self.width) |j| {
-                    self.ptr[i*self.width+j] += vec[j];
+                    self.ptr.?[i*self.width+j] += vec[j];
                 }
             }
         }
@@ -146,9 +146,10 @@ pub fn Matrix(comptime T: type) type {
             }
 
             // dumb implementation
+            const ptr = self.ptr.?;
             for (0..self.height) |i| {
                 for (0..self.width) |j| {
-                    self.ptr[i*self.width+j] += vec[i];
+                    ptr[i*self.width+j] += vec[i];
                 }
             }
         }
@@ -158,6 +159,13 @@ pub fn Matrix(comptime T: type) type {
                 e.* = @max(0, e.*);
             }
         }
+
+        pub const empty = Matrix(T) {
+            .capacity = 0,
+            .height = 0,
+            .width = 0,
+            .ptr = null,
+        };
 
 // ---------------------------- TESTS --------------------------------------
         test init {

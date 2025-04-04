@@ -4,7 +4,7 @@ const mtx = @import("matrix.zig");
 const Matrix = mtx.Matrix;
 const Attention = att.Attention;
 
-const MHAttentionHeader = struct {
+pub const MHAttentionHeader = struct {
     version: u32,
     type_len: u32,
     heads: u32,
@@ -284,8 +284,12 @@ pub fn MHAttention(comptime T: type) type {
                 std.log.err("Input is too long!\n", .{});
                 return error.IncompatibleObjects;
             }
-            for (self.attentions, 0..) |*a, i| {
-                try a.compute(ctx, seq, mask); // do we set out correctly?
+            for (self.attentions) |*a| {
+                try a.compute(ctx, seq, mask);
+            }
+            
+            // this way we can pass seq to the out @TestIt
+            for (0..self.attentions.len) |i| {
                 const start_transform: u32 = @truncate(transform_size*i);
                 const end_transform: u32 = @truncate(transform_size*(i+1));
                 const transform = self.comb_matrix.submatrix(start_transform, end_transform).?;

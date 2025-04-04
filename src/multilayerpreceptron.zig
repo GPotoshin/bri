@@ -89,6 +89,13 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             try self.out.addRow(self.vec2);
         } 
 
+        pub fn init(allocator: std.mem.Allocator, header: MultilayerPreceptronHeader) !Self {
+            var retval: Self = undefined;
+            retval.header = header;
+            try retval.allocateFromHeader(allocator);
+            return retval;
+        }
+
         pub fn allocateFromHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.mat1 = try Matrix(T).init(allocator, self.header.mid_dim, self.header.in_dim);
             self.vec1 = try allocator.alloc(T, self.header.mid_dim);

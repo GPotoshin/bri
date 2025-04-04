@@ -19,8 +19,7 @@ pub fn EDTransformer(comptime T: type) type {
 
         pub fn calculate(self: Self, ctx: Matrix(T), seq: Matrix(T)) void {
             try self.encoder.compute(ctx);
-            
-
+            try self.decoder.compute(ctx, seq);
 
         }
     };

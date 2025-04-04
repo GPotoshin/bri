@@ -9,6 +9,13 @@ pub fn LayerNorm(comptime T: type) type {
         beta: []T,
 
         const Self = @This();
+        pub fn init(allocator: std.mem.Allocator, dim: u32) !Self {
+            return LayerNorm(T) {
+                .gamma = try allocator.alloc(T, dim),
+                .beta = try allocator.alloc(T, dim),
+            };
+        }
+
         pub fn apply(self: Self, mat: Matrix(T)) void {
             const dim: T = @floatFromInt(mat.width);
             for (0..mat.height) |i| {
