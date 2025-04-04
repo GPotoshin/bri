@@ -1,3 +1,4 @@
+const std = @import("std");
 const mhatt = @import("mhattention.zig");
 const att = @import("attention.zig");
 const mtx = @import("matrix.zig"); 
@@ -46,10 +47,10 @@ pub fn Data(comptime T: type) type {
             .max_ctx_len = 8,
         };
 
-        var test_comb_mat_data = [
+        pub var test_comb_mat_data = [
             test_mhatt_header.heads *
             test_mhatt_header.out_dim *
-            test_mhatt_header.out_dim
+            test_mhatt_header.mid_dim
         ]T {
             0.1, 0.2, 0.3, 0.4,
             0.1, 0.2, 0.3, 0.4,
@@ -76,9 +77,15 @@ pub fn Data(comptime T: type) type {
             0.3, 0.2, 0.8, 0.7,
         };
 
-        var com_vec_data = [5]T {0.1, -0.1, 0, 0.2, -0.2};
+        pub var com_vec_data = [5]T {0.1, -0.1, 0, 0.2, -0.2};
         var att_res_data: [7*4*4]T = undefined;
-        pub var out_data: [5*7]T = undefined;
+        var out_data: [5*7]T = undefined;
+        pub var test_out_matrix = Matrix(T) {
+            .capacity = 5*7,
+            .width = 5,
+            .height = 7,
+            .ptr = &out_data,
+        };
 
         pub var test_att1_cont1 = [_]T {
             0,
@@ -91,16 +98,16 @@ pub fn Data(comptime T: type) type {
             3, 4,
             6, 7,
         };
-        var test_att1_cont4 = [_]T {-1, -2, -3};
-        var test_att1_cont5 = [_]T {
+        pub var test_att1_cont4 = [_]T {-1, -2, -3};
+        pub var test_att1_cont5 = [_]T {
             9, 8, 
             6, 5, 
             3, 2, 
             0,-1,
         };
-        var test_att1_cont6 = [_]T {2, 4, 6, 8};
+        pub var test_att1_cont6 = [_]T {2, 4, 6, 8};
 
-        const test_att1_header = test_mhatt_header.toAttentionHeader();
+        pub const test_att1_header = test_mhatt_header.toAttentionHeader();
 
         const atten = Attention(T) {
             .header = test_att1_header,
@@ -124,7 +131,7 @@ pub fn Data(comptime T: type) type {
 
             .value_matrix = Matrix(T) {
                 .capacity = test_att1_header.out_dim*test_att1_header.ctx_dim,
-                .height = test_att1_header.mid_dim,
+                .height = test_att1_header.out_dim,
                 .width = test_att1_header.ctx_dim,
                 .ptr = &test_att1_cont5,
             },
@@ -141,7 +148,7 @@ pub fn Data(comptime T: type) type {
         var mid_data: [4][4*7]T = undefined;
         var attentions = [4]Attention(T) {atten, atten, atten, atten};
 
-        pub const mhatt = MHAttention(T) {
+        pub const test_mhatt = MHAttention(T) {
             .header = test_mhatt_header,
 
             .attentions = &attentions,
@@ -159,7 +166,6 @@ pub fn Data(comptime T: type) type {
             },
             .comb_vect = &com_vec_data,
 
-
             .out = Matrix(T){
                 .capacity = out_data.len,
                 .height = 7,
@@ -167,5 +173,44 @@ pub fn Data(comptime T: type) type {
                 .ptr = &out_data,
             },
         };
+
+        var seq_data = [_]T { 0.1, 0.3, 0.2, 0.4 };
+        var ctx_data = [_]T { 0.1, 0.3, 0.2, 0.4, 0.3, 0.4, 0.0, -0.1 };
+
+        pub const test_seq = Matrix(T) {
+            .capacity = 4,
+            .height = 4,
+            .width = 1,
+            .ptr = &seq_data,
+        };
+        pub const test_ctx = Matrix(T) {
+            .capacity = 8,
+            .height = 4,
+            .width = 2,
+            .ptr = &ctx_data,
+        };
+
+        pub const test_att1_answer_data = [_]T {
+            39.63546734, 45.51779338, 46.37794993, 37.45404993, 40.09511809,
+            39.9070572, 45.82308028, 46.6671428, 37.6305832, 40.27416612,
+            39.78800458, 45.68924128, 46.54031778, 37.55304782, 40.19549336,
+            40.00224998, 45.93011503, 46.7686183, 37.69276302, 40.33729753,
+        };
+        
+        pub fn prepareTest() void {
+            for (&attentions, &mid_data) |*a, *d| {
+                a.out.ptr = d;
+                a.out.capacity = 28;
+            }
+        }
+
+        pub fn compare_delta(expected: []const T, actual: []const T, delta: T) !void {
+            if (expected.len != actual.len) {
+                return error.IncompatibleObjects;
+            }
+            for (expected, actual) |e, a| {
+                try std.testing.expectApproxEqRel(e, a, delta);
+            }
+        }
     };
 }

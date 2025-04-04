@@ -304,138 +304,6 @@ pub fn MHAttention(comptime T: type) type {
             try self.out.addRow(self.comb_vect);
         }
 
-        // @Tests
-        const testData = struct {
-            pub const header2 = MHAttentionHeader {
-                .version = 0,
-                .type_len = @sizeOf(T),
-                .heads = 4,
-                .seq_dim = 1,
-                .ctx_dim = 2,
-                .att_dim = 3,
-                .mid_dim = 4,
-                .out_dim = 5,
-                .max_seq_len = 7,
-                .max_ctx_len = 8,
-            };
-
-            var comb_mat_data = [_]T {
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-
-                0.9, 0.2, 0.1, 0.4,
-                0.9, 0.2, 0.1, 0.4,
-                0.9, 0.2, 0.1, 0.7,
-                0.3, 0.2, 0.1, 0.7,
-                0.3, 0.2, 0.1, 0.7,
-
-                0.9, 0.2, 0.1, 0.4,
-                0.9, 0.5, 0.6, 0.4,
-                0.9, 0.5, 0.1, 0.7,
-                0.3, 0.5, 0.1, 0.7,
-                0.3, 0.2, 0.8, 0.7,
-            };
-
-            var att_res_data: [7*4*4]T = undefined;
-            var com_vec_data = [5]T {0.1, -0.1, 0, 0.2, -0.2};
-            pub var out_data: [5*7]T = undefined;
-
-            pub var cont1 = [_]T {
-                0,
-                2,
-                4,
-            };
-            pub var cont2 = [_]T {0, 1, 2};
-            pub var cont3 = [_]T {
-                0, 1,
-                3, 4,
-                6, 7,
-            };
-            var cont4 = [_]T {-1, -2, -3};
-            var cont5 = [_]T {
-                9, 8, 
-                6, 5, 
-                3, 2, 
-                0,-1,
-            };
-            var cont6 = [_]T {2, 4, 6, 8};
-            
-            const atten = Attention(T) {
-                    .header = header2.toAttentionHeader(),
-                    .query_matrix = Matrix(T) {
-                        .capacity = header2.att_dim*header2.seq_dim,
-                        .height = header2.att_dim,
-                        .width = header2.seq_dim,
-                        .ptr = &cont1,
-                    },
-
-                    .query_vect = &cont2,
-
-                    .key_matrix = Matrix(T) {
-                        .capacity = header2.att_dim*header2.ctx_dim,
-                        .height = header2.att_dim,
-                        .width = header2.ctx_dim,
-                        .ptr = &cont3,
-                    },
-
-                    .key_vect = &cont4,
-
-                    .value_matrix = Matrix(T) {
-                        .capacity = header2.out_dim*header2.ctx_dim,
-                        .height = header2.mid_dim,
-                        .width = header2.ctx_dim,
-                        .ptr = &cont5,
-                    },
-
-                    .value_vect = &cont6,
-
-                    .key = undefined,
-                    .value = undefined,
-                    .query = undefined,
-                    .score = undefined,
-                    .out = undefined,
-            };
-
-            var mid_data: [4][4*7]T = undefined;
-            var attentions = [4]Attention(T) {atten, atten, atten, atten};
-
-            pub const mhatt = MHAttention(T) {
-                .header = header2,
-
-                .attentions = &attentions,
-                .att_results = Matrix(T) {
-                    .capacity = 7*4*4,
-                    .height = 7*4,
-                    .width = 4,
-                    .ptr = &att_res_data,
-                },
-                .comb_matrix = Matrix(T) {
-                    .capacity = 5*4*4,
-                    .height = 5*4,
-                    .width = 4,
-                    .ptr = &comb_mat_data,
-                },
-                .comb_vect = &com_vec_data,
-
-                .out = Matrix(T){
-                    .capacity = out_data.len,
-                    .height = 7,
-                    .width = 5,
-                    .ptr = &out_data,
-                },
-            };
-            
-        };
-
         const newTestData = @import("test.zig").Data(T);
 
         test allocateForHeader {
@@ -465,15 +333,13 @@ pub fn MHAttention(comptime T: type) type {
         }
 
         test writeWeights {
+            newTestData.prepareTest();
+
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .write_only});
             defer file.close();
             const writer = file.writer();
 
-            var mhatt = testData.mhatt;
-            for (mhatt.attentions, &testData.mid_data) |*a, *d| {
-                a.out.ptr = d;
-                a.out.capacity = 28;
-            }
+            var mhatt = newTestData.test_mhatt;
 
             try mhatt.header.write(writer);
             try mhatt.writeWeights(writer);
@@ -495,26 +361,26 @@ pub fn MHAttention(comptime T: type) type {
 
 
             // testing header data
-            try std.testing.expectEqualDeep(testData.header2, mhatt.header);
-            try std.testing.expectEqualDeep(testData.header2.toAttentionHeader(), mhatt.attentions[2].header);
+            try std.testing.expectEqualDeep(newTestData.test_mhatt_header, mhatt.header);
+            try std.testing.expectEqualDeep(newTestData.test_att1_header, mhatt.attentions[2].header);
 
             // testing wights data
             try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
-                &testData.cont1);
+                &newTestData.test_att1_cont1);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
-                &testData.cont2);
+                &newTestData.test_att1_cont2);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
-                &testData.cont3);
+                &newTestData.test_att1_cont3);
             try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
-                &testData.cont4);
+                &newTestData.test_att1_cont4);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
-                &testData.cont5);
+                &newTestData.test_att1_cont5);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
-                &testData.cont6);
+                &newTestData.test_att1_cont6);
             try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
-                &testData.comb_mat_data);
+                &newTestData.test_comb_mat_data);
             try std.testing.expectEqualSlices(T, mhatt.comb_vect,
-                &testData.com_vec_data);
+                &newTestData.com_vec_data);
         }
 
         test initFromFile {
@@ -527,26 +393,26 @@ pub fn MHAttention(comptime T: type) type {
 
 
             // testing header data
-            try std.testing.expectEqualDeep(testData.header2, mhatt.header);
-            try std.testing.expectEqualDeep(testData.header2.toAttentionHeader(), mhatt.attentions[2].header);
+            try std.testing.expectEqualDeep(newTestData.test_mhatt_header, mhatt.header);
+            try std.testing.expectEqualDeep(newTestData.test_att1_header, mhatt.attentions[2].header);
 
             // testing wights data
             try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
-                &testData.cont1);
+                &newTestData.test_att1_cont1);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
-                &testData.cont2);
+                &newTestData.test_att1_cont2);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
-                &testData.cont3);
+                &newTestData.test_att1_cont3);
             try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
-                &testData.cont4);
+                &newTestData.test_att1_cont4);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
-                &testData.cont5);
+                &newTestData.test_att1_cont5);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
-                &testData.cont6);
+                &newTestData.test_att1_cont6);
             try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
-                &testData.comb_mat_data);
+                &newTestData.test_comb_mat_data);
             try std.testing.expectEqualSlices(T, mhatt.comb_vect,
-                &testData.com_vec_data);
+                &newTestData.com_vec_data);
         }
 
         test compute {
@@ -556,50 +422,12 @@ pub fn MHAttention(comptime T: type) type {
             defer file.close();
             var mhatt = try MHAttention(T).initFromFile(allocator, file);
             defer mhatt.destroy(allocator);
-            var out = try Matrix(T).init(allocator, mhatt.header.max_seq_len,
-                mhatt.header.out_dim);
-            defer out.destroy(allocator);
-            mhatt.out = out;
+            mhatt.out = newTestData.test_out_matrix;
 
-            var seq_data = [_]T { 0.1, 0.3, 0.2, 0.4 };
-            var ctx_data = [_]T { 0.1, 0.3, 0.2, 0.4, 0.3, 0.4, 0.0, -0.1 };
-
-            const seq = Matrix(T) {
-                .capacity = 4,
-                .height = 4,
-                .width = 1,
-                .ptr = &seq_data,
-            };
-            const ctx = Matrix(T) {
-                .capacity = 8,
-                .height = 4,
-                .width = 2,
-                .ptr = &ctx_data,
-            };
-
-            try mhatt.compute(ctx, seq, .bidirectional);
+            try mhatt.compute(newTestData.test_ctx, newTestData.test_seq, .bidirectional);
 
             // right results
-            try std.testing.expect(@abs(mhatt.out.toSlice()[0]-39.63546734) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[1]-45.51779338) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[2]-46.37794993) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[3]-37.45404993) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[4]-40.09511809) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[5]-39.9070572) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[6]-45.82308028) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[7]-46.6671428) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[8]-37.6305832) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[9]-40.27416612) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[10]-39.78800458) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[11]-45.68924128) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[12]-46.54031778) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[13]-37.55304782) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[14]-40.19549336) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[15]-40.00224998) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[16]-45.93011503) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[17]-46.7686183) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[18]-37.69276302) < 0.00001);
-            try std.testing.expect(@abs(mhatt.out.toSlice()[19]-40.33729753) < 0.00001);
+            try newTestData.compare_delta(&newTestData.test_att1_answer_data, mhatt.out.toSlice(), 0.00001);
         }
     };
 }
