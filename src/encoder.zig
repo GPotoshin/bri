@@ -57,12 +57,14 @@ pub fn EncodeLayer(comptime T: type) type {
         layer_norm2: LayerNorm(T),
 
         const Self = @This();
-        pub fn init(self: Self, allocator: std.mem.Allocator, header: EncodeLayerHeader) !void {
-            self.header = header;
-            self.mhattention = try MHAttention(T).init(allocator, header.toMHAttentionHeader(), Matrix(T).empty);
-            self.layer_norm1 = try LayerNorm(T).init(allocator, header.ctx_dim);
-            self.preceptron = try MultilayerPreceptron(T).init(allocator, header.toMLPHeader());
-            self.layer_norm2 = try LayerNorm(T).init(allocator, header.ctx_dim);
+        pub fn init(allocator: std.mem.Allocator, header: EncodeLayerHeader) !Self {
+            var retval: Self = undefined;
+            retval.header = header;
+            retval.mhattention = try MHAttention(T).init(allocator, header.toMHAttentionHeader(), Matrix(T).empty);
+            retval.layer_norm1 = try LayerNorm(T).init(allocator, header.ctx_dim);
+            retval.preceptron = try MultilayerPreceptron(T).init(allocator, header.toMLPHeader());
+            retval.layer_norm2 = try LayerNorm(T).init(allocator, header.ctx_dim);
+            return retval;
         }
 
         pub fn compute(self: Self, ctx: Matrix(T)) !void {
@@ -86,129 +88,26 @@ pub fn EncodeLayer(comptime T: type) type {
             try self.preceptron.readWeights(reader);
             try self.layer_norm1.readWeights(reader);
         }
+        
+        pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+            self.mhattention.destroy(allocator);
+            self.layer_norm1.destry(allocator);
+            self.preceptron.destroy(allocator);
+            self.layer_norm2.destroy(allocator);
+        }
 
-        const testData = struct {
-
-            pub const header = EncodeLayerHeader {
-                .version = 0,
-                .type_len = @sizeOf(T),
-                .heads = 2,
-                .ctx_dim = 2,
-                .att_dim = 3,
-                .mid_dim = 4,
-                .mlp_dim = 5,
-                .max_ctx_len = 6,
-            };
-
-            var comb_mat_data = [_]T {
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-                0.1, 0.2, 0.3, 0.4,
-
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-                0.3, 0.2, 0.1, 0.4,
-            };
-
-            var att_res_data: [header.max_ctx_len*header.heads*header.mid_dim]T = undefined;
-            var com_vec_data = [5]T {0.1, -0.1, 0, 0.2, -0.2};
-
-            pub var cont1 = [_]T {
-                0,
-                2,
-                4,
-            };
-            pub var cont2 = [_]T {0, 1, 2};
-            pub var cont3 = [_]T {
-                0, 1,
-                3, 4,
-                6, 7,
-            };
-            var cont4 = [_]T {-1, -2, -3};
-            var cont5 = [_]T {
-                9, 8, 
-                6, 5, 
-                3, 2, 
-                0,-1,
-            };
-            var cont6 = [_]T {2, 4, 6, 8};
-            
-            const atten = att.Attention(T) {
-                    .header = header2.toAttentionHeader(),
-                    .query_matrix = Matrix(T) {
-                        .capacity = header2.att_dim*header2.seq_dim,
-                        .height = header2.att_dim,
-                        .width = header2.seq_dim,
-                        .ptr = &cont1,
-                    },
-
-                    .query_vect = &cont2,
-
-                    .key_matrix = Matrix(T) {
-                        .capacity = header2.att_dim*header2.ctx_dim,
-                        .height = header2.att_dim,
-                        .width = header2.ctx_dim,
-                        .ptr = &cont3,
-                    },
-
-                    .key_vect = &cont4,
-
-                    .value_matrix = Matrix(T) {
-                        .capacity = header2.out_dim*header2.ctx_dim,
-                        .height = header2.mid_dim,
-                        .width = header2.ctx_dim,
-                        .ptr = &cont5,
-                    },
-
-                    .value_vect = &cont6,
-
-                    .key = undefined,
-                    .value = undefined,
-                    .query = undefined,
-                    .score = undefined,
-                    .out = undefined,
-            };
-
-            var mid_data: [4][4*7]T = undefined;
-            var attentions = [4]att.Attention(T) {atten, atten, atten, atten};
-
-            pub const mhatt = MHAttention(T) {
-                .header = header2,
-
-                .attentions = &attentions,
-                .att_results = Matrix(T) {
-                    .capacity = 7*4*4,
-                    .height = 7*4,
-                    .width = 4,
-                    .ptr = &att_res_data,
-                },
-                .comb_matrix = Matrix(T) {
-                    .capacity = 5*4*4,
-                    .height = 5*4,
-                    .width = 4,
-                    .ptr = &comb_mat_data,
-                },
-                .comb_vect = &com_vec_data,
-
-
-                .out = Matrix(T){
-                    .capacity = out_data.len,
-                    .height = 7,
-                    .width = 5,
-                    .ptr = &out_data,
-                },
-            };
-
-        };
+        const testData = @import("test.zig").encoderData(T);
 
         test compute {
-
+            const allocator = std.testing.allocator;
+            const encodeLayer = try EncodeLayer(T).init(allocator, testData.big_el_header);
+            encodeLayer.destroy(allocator);
         }
     };
+}
+
+comptime {
+    _ = EncodeLayer(f64);
 }
 
 pub fn Encoder(comptime T: type) type {

@@ -304,20 +304,20 @@ pub fn MHAttention(comptime T: type) type {
             try self.out.addRow(self.comb_vect);
         }
 
-        const newTestData = @import("test.zig").Data(T);
+        const testData = @import("test.zig").mhattData(T);
 
         test allocateForHeader {
             const allocator = std.testing.allocator;
             var mhatt: Self = undefined;
-            mhatt.header = newTestData.big_mhatt_header;
+            mhatt.header = testData.big_mhatt_header;
             try mhatt.allocateForHeader(allocator);
             defer mhatt.destroy(allocator);
         }
 
         test init {
             const allocator = std.testing.allocator;
-            var mhatt = try init(allocator, newTestData.big_mhatt_header,
-                newTestData.big_mhatt_out);
+            var mhatt = try init(allocator, testData.big_mhatt_header,
+                testData.big_mhatt_out);
             mhatt.destroy(allocator);
         }
 
@@ -325,21 +325,21 @@ pub fn MHAttention(comptime T: type) type {
             const allocator = std.testing.allocator;
             var xoshiro = std.Random.Xoshiro256.init(123);
             const rand = xoshiro.random();
-            var mhatt = try init(allocator, newTestData.big_mhatt_header,
-                newTestData.big_mhatt_out);
+            var mhatt = try init(allocator, testData.big_mhatt_header,
+                testData.big_mhatt_out);
             defer mhatt.destroy(allocator);
 
             mhatt.fillRandom(rand, 0.1);
         }
 
         test writeWeights {
-            newTestData.prepareTest();
+            testData.prepareTest();
 
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .write_only});
             defer file.close();
             const writer = file.writer();
 
-            var mhatt = newTestData.test_mhatt;
+            var mhatt = testData.test_mhatt;
 
             try mhatt.header.write(writer);
             try mhatt.writeWeights(writer);
@@ -361,26 +361,26 @@ pub fn MHAttention(comptime T: type) type {
 
 
             // testing header data
-            try std.testing.expectEqualDeep(newTestData.test_mhatt_header, mhatt.header);
-            try std.testing.expectEqualDeep(newTestData.test_att1_header, mhatt.attentions[2].header);
+            try std.testing.expectEqualDeep(testData.test_mhatt_header, mhatt.header);
+            try std.testing.expectEqualDeep(testData.test_att1_header, mhatt.attentions[2].header);
 
             // testing wights data
             try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
-                &newTestData.test_att1_cont1);
+                &testData.test_att1_cont1);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
-                &newTestData.test_att1_cont2);
+                &testData.test_att1_cont2);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
-                &newTestData.test_att1_cont3);
+                &testData.test_att1_cont3);
             try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
-                &newTestData.test_att1_cont4);
+                &testData.test_att1_cont4);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
-                &newTestData.test_att1_cont5);
+                &testData.test_att1_cont5);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
-                &newTestData.test_att1_cont6);
+                &testData.test_att1_cont6);
             try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
-                &newTestData.test_comb_mat_data);
+                &testData.test_comb_mat_data);
             try std.testing.expectEqualSlices(T, mhatt.comb_vect,
-                &newTestData.com_vec_data);
+                &testData.com_vec_data);
         }
 
         test initFromFile {
@@ -393,26 +393,26 @@ pub fn MHAttention(comptime T: type) type {
 
 
             // testing header data
-            try std.testing.expectEqualDeep(newTestData.test_mhatt_header, mhatt.header);
-            try std.testing.expectEqualDeep(newTestData.test_att1_header, mhatt.attentions[2].header);
+            try std.testing.expectEqualDeep(testData.test_mhatt_header, mhatt.header);
+            try std.testing.expectEqualDeep(testData.test_att1_header, mhatt.attentions[2].header);
 
             // testing wights data
             try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
-                &newTestData.test_att1_cont1);
+                &testData.test_att1_cont1);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
-                &newTestData.test_att1_cont2);
+                &testData.test_att1_cont2);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
-                &newTestData.test_att1_cont3);
+                &testData.test_att1_cont3);
             try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
-                &newTestData.test_att1_cont4);
+                &testData.test_att1_cont4);
             try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
-                &newTestData.test_att1_cont5);
+                &testData.test_att1_cont5);
             try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
-                &newTestData.test_att1_cont6);
+                &testData.test_att1_cont6);
             try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
-                &newTestData.test_comb_mat_data);
+                &testData.test_comb_mat_data);
             try std.testing.expectEqualSlices(T, mhatt.comb_vect,
-                &newTestData.com_vec_data);
+                &testData.com_vec_data);
         }
 
         test compute {
@@ -422,12 +422,12 @@ pub fn MHAttention(comptime T: type) type {
             defer file.close();
             var mhatt = try MHAttention(T).initFromFile(allocator, file);
             defer mhatt.destroy(allocator);
-            mhatt.out = newTestData.test_out_matrix;
+            mhatt.out = testData.test_out_matrix;
 
-            try mhatt.compute(newTestData.test_ctx, newTestData.test_seq, .bidirectional);
+            try mhatt.compute(testData.test_ctx, testData.test_seq, .bidirectional);
 
             // right results
-            try newTestData.compare_delta(&newTestData.test_att1_answer_data, mhatt.out.toSlice(), 0.00001);
+            try @import("test.zig").compare_delta(T, &testData.test_att1_answer_data, mhatt.out.toSlice(), 0.00001);
         }
     };
 }

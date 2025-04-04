@@ -2,14 +2,17 @@ const std = @import("std");
 const mhatt = @import("mhattention.zig");
 const att = @import("attention.zig");
 const mtx = @import("matrix.zig"); 
+const enc = @import("encoder.zig");
 
 const Attention = att.Attention;
 const AttentionHeader = att.AttentionHeader;
 const MHAttention = mhatt.MHAttention;
 const MHAttentionHeader = mhatt.MHAttentionHeader;
+const EncodeLayer = enc.EncodeLayer;
+const EncodeLayerHeader = enc.EncodeLayerHeader;
 const Matrix = mtx.Matrix;
 
-pub fn Data(comptime T: type) type {
+pub fn mhattData(comptime T: type) type {
     return struct {
         pub const big_mhatt_header = MHAttentionHeader {
             .version = 0,
@@ -204,13 +207,42 @@ pub fn Data(comptime T: type) type {
             }
         }
 
-        pub fn compare_delta(expected: []const T, actual: []const T, delta: T) !void {
-            if (expected.len != actual.len) {
-                return error.IncompatibleObjects;
-            }
-            for (expected, actual) |e, a| {
-                try std.testing.expectApproxEqRel(e, a, delta);
-            }
-        }
+
+        // testing encoder
     };
+}
+
+pub fn encoderData(comptime T: type) type {
+    return struct {
+        pub const big_el_header = EncodeLayerHeader {
+            .version = 0,
+            .type_len = @sizeOf(T),
+            .heads = 16,
+            .ctx_dim = 1024,
+            .att_dim = 96,
+            .mid_dim = 1024,
+            .mlp_dim = 4096,
+            .max_ctx_len = 1024,
+        };
+
+        pub const test_el_header = EncodeLayerHeader {
+            .version = 0,
+            .type_len = @sizeOf(T),
+            .heads = 2,
+            .ctx_dim = 2,
+            .att_dim = 3,
+            .mid_dim = 4,
+            .mlp_dim = 5,
+            .max_ctx_len = 10,
+        };
+    };
+}
+
+pub fn compare_delta(comptime T: type, expected: []const T, actual: []const T, delta: T) !void {
+    if (expected.len != actual.len) {
+        return error.IncompatibleObjects;
+    }
+    for (expected, actual) |e, a| {
+        try std.testing.expectApproxEqRel(e, a, delta);
+    }
 }
