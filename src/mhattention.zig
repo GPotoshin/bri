@@ -306,18 +306,6 @@ pub fn MHAttention(comptime T: type) type {
 
         // @Tests
         const testData = struct {
-            const header = MHAttentionHeader {
-                .version = 0,
-                .type_len = @sizeOf(T),
-                .heads = 4,
-                .seq_dim = 1024,
-                .ctx_dim = 1024,
-                .att_dim = 1024,
-                .mid_dim = 1024,
-                .out_dim = 1024,
-                .max_seq_len = 1024,
-                .max_ctx_len = 1024,
-            };
             pub const header2 = MHAttentionHeader {
                 .version = 0,
                 .type_len = @sizeOf(T),
@@ -438,7 +426,6 @@ pub fn MHAttention(comptime T: type) type {
                 },
                 .comb_vect = &com_vec_data,
 
-
                 .out = Matrix(T){
                     .capacity = out_data.len,
                     .height = 7,
@@ -449,31 +436,29 @@ pub fn MHAttention(comptime T: type) type {
             
         };
 
+        const newTestData = @import("test.zig").Data(T);
+
         test allocateForHeader {
             const allocator = std.testing.allocator;
             var mhatt: Self = undefined;
-            mhatt.header = testData.header;
+            mhatt.header = newTestData.big_mhatt_header;
             try mhatt.allocateForHeader(allocator);
             defer mhatt.destroy(allocator);
         }
 
         test init {
             const allocator = std.testing.allocator;
-            var out = try Matrix(T).init(allocator, testData.header.max_seq_len,
-                testData.header.out_dim);
-            var mhatt = try init(allocator, testData.header, out);
+            var mhatt = try init(allocator, newTestData.big_mhatt_header,
+                newTestData.big_mhatt_out);
             mhatt.destroy(allocator);
-            out.destroy(allocator);
         }
 
         test fillRandom {
             const allocator = std.testing.allocator;
             var xoshiro = std.Random.Xoshiro256.init(123);
             const rand = xoshiro.random();
-            var out = try Matrix(T).init(allocator, testData.header.max_seq_len,
-                testData.header.out_dim);
-            defer out.destroy(allocator);
-            var mhatt = try init(allocator, testData.header, out);
+            var mhatt = try init(allocator, newTestData.big_mhatt_header,
+                newTestData.big_mhatt_out);
             defer mhatt.destroy(allocator);
 
             mhatt.fillRandom(rand, 0.1);

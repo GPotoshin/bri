@@ -286,7 +286,7 @@ pub fn Attention(comptime T: type) type {
             mtx.fillVecRandom(T, rand, self.value_vect, k);
         }
 
-        const TestingData = struct {
+        const testData = struct {
             pub const header = AttentionHeader {
                 .version = 0,
                 .type_len = @sizeOf(T),
@@ -324,17 +324,17 @@ pub fn Attention(comptime T: type) type {
 
         test init {
             const allocator = std.testing.allocator;
-            var out = try Matrix(T).init(allocator, TestingData.header.max_seq_len, TestingData.header.out_dim);
-            var att = try Attention(T).init(allocator, TestingData.header, out);
+            var out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
+            var att = try Attention(T).init(allocator, testData.header, out);
             att.destroy(allocator);
             out.destroy(allocator);
         }
         
         test allocateForHeader {
             const allocator = std.testing.allocator;
-            var out = try Matrix(T).init(allocator, TestingData.header.max_seq_len, TestingData.header.out_dim);
+            var out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
             var att: Attention(T) = undefined;
-            att.header = TestingData.header;
+            att.header = testData.header;
             att.out = out;
             try att.allocateForHeader(allocator);
             att.destroy(allocator);
@@ -345,31 +345,31 @@ pub fn Attention(comptime T: type) type {
             const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .write_only});
             const writer = file.writer();
 
-            try TestingData.header.write(writer);
+            try testData.header.write(writer);
 
             var att: Attention(T) = undefined;
-            att.header = TestingData.header;
+            att.header = testData.header;
 
-            att.query_matrix.capacity = TestingData.header.att_dim*TestingData.header.seq_dim;
-            att.query_matrix.height = TestingData.header.att_dim;
-            att.query_matrix.width = TestingData.header.seq_dim;
-            att.query_matrix.ptr = &TestingData.cont1;
+            att.query_matrix.capacity = testData.header.att_dim*testData.header.seq_dim;
+            att.query_matrix.height = testData.header.att_dim;
+            att.query_matrix.width = testData.header.seq_dim;
+            att.query_matrix.ptr = &testData.cont1;
 
-            att.query_vect = &TestingData.cont2;
+            att.query_vect = &testData.cont2;
 
-            att.key_matrix.capacity = TestingData.header.att_dim*TestingData.header.ctx_dim;
-            att.key_matrix.height = TestingData.header.att_dim;
-            att.key_matrix.width = TestingData.header.ctx_dim;
-            att.key_matrix.ptr = &TestingData.cont3;
+            att.key_matrix.capacity = testData.header.att_dim*testData.header.ctx_dim;
+            att.key_matrix.height = testData.header.att_dim;
+            att.key_matrix.width = testData.header.ctx_dim;
+            att.key_matrix.ptr = &testData.cont3;
 
-            att.key_vect = &TestingData.cont4;
+            att.key_vect = &testData.cont4;
 
-            att.value_matrix.capacity = TestingData.header.out_dim*TestingData.header.ctx_dim;
-            att.value_matrix.height = TestingData.header.out_dim;
-            att.value_matrix.width = TestingData.header.ctx_dim;
-            att.value_matrix.ptr = &TestingData.cont5;
+            att.value_matrix.capacity = testData.header.out_dim*testData.header.ctx_dim;
+            att.value_matrix.height = testData.header.out_dim;
+            att.value_matrix.width = testData.header.ctx_dim;
+            att.value_matrix.ptr = &testData.cont5;
 
-            att.value_vect = &TestingData.cont6;
+            att.value_vect = &testData.cont6;
 
             try att.writeWeights(writer);
             try file.setEndPos(try file.getPos());
@@ -389,17 +389,17 @@ pub fn Attention(comptime T: type) type {
             try att.allocateForHeader(allocator);
             try att.readWeights(reader);
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont1, att.query_matrix.toSlice());
+            try std.testing.expectEqualSlices(T, &testData.cont1, att.query_matrix.toSlice());
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont2, att.query_vect);
+            try std.testing.expectEqualSlices(T, &testData.cont2, att.query_vect);
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont3, att.key_matrix.toSlice());
+            try std.testing.expectEqualSlices(T, &testData.cont3, att.key_matrix.toSlice());
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont4, att.key_vect);
+            try std.testing.expectEqualSlices(T, &testData.cont4, att.key_vect);
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont5, att.value_matrix.toSlice());
+            try std.testing.expectEqualSlices(T, &testData.cont5, att.value_matrix.toSlice());
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont6, att.value_vect);
+            try std.testing.expectEqualSlices(T, &testData.cont6, att.value_vect);
 
             att.destroy(allocator);
             file.close();
@@ -418,17 +418,17 @@ pub fn Attention(comptime T: type) type {
             try att.allocateForHeader(allocator);
             try att.readWeights(reader);
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont1, att.query_matrix.toSlice());
+            try std.testing.expectEqualSlices(T, &testData.cont1, att.query_matrix.toSlice());
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont2, att.query_vect);
+            try std.testing.expectEqualSlices(T, &testData.cont2, att.query_vect);
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont3, att.key_matrix.toSlice());
+            try std.testing.expectEqualSlices(T, &testData.cont3, att.key_matrix.toSlice());
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont4, att.key_vect);
+            try std.testing.expectEqualSlices(T, &testData.cont4, att.key_vect);
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont5, att.value_matrix.toSlice());
+            try std.testing.expectEqualSlices(T, &testData.cont5, att.value_matrix.toSlice());
 
-            try std.testing.expectEqualSlices(T, &TestingData.cont6, att.value_vect);
+            try std.testing.expectEqualSlices(T, &testData.cont6, att.value_vect);
 
             att.destroy(allocator);
             file.close();

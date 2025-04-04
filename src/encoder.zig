@@ -137,7 +137,7 @@ pub fn EncodeLayer(comptime T: type) type {
             };
             var cont6 = [_]T {2, 4, 6, 8};
             
-            const atten = Attention(T) {
+            const atten = att.Attention(T) {
                     .header = header2.toAttentionHeader(),
                     .query_matrix = Matrix(T) {
                         .capacity = header2.att_dim*header2.seq_dim,
@@ -174,7 +174,7 @@ pub fn EncodeLayer(comptime T: type) type {
             };
 
             var mid_data: [4][4*7]T = undefined;
-            var attentions = [4]Attention(T) {atten, atten, atten, atten};
+            var attentions = [4]att.Attention(T) {atten, atten, atten, atten};
 
             pub const mhatt = MHAttention(T) {
                 .header = header2,
@@ -202,6 +202,7 @@ pub fn EncodeLayer(comptime T: type) type {
                     .ptr = &out_data,
                 },
             };
+
         };
 
         test compute {
