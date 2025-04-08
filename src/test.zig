@@ -235,6 +235,260 @@ pub fn encoderData(comptime T: type) type {
             .mlp_dim = 5,
             .max_ctx_len = 10,
         };
+
+        var ctx_data = [10]T {
+            2, 3,
+            1, 7,
+            2, 1,
+            4, 0,
+            3, 1,
+        };
+
+        pub const ctx = Matrix(T) {
+            .capacity = 10,
+            .width = 2,
+            .height = 5,
+            .ptr = &ctx_data,
+        };
+
+        pub const mhatt_header = test_el_header.toMHAttentionHeader();
+
+        pub const head1 = struct {
+            var qmat_data = [_]T {
+                0.1, -0.2,
+                -0.3, 0.2,
+                0.2, -0.1,
+            };
+
+            var qvec_data = [_]T {0.0, 0.1, 0.2};
+
+            var kmat_data = [_]T {
+                0.1, 0.2,
+                -0.3, -0.2,
+                0.2, -0.2,
+            };
+
+            var kvec_data = [_]T {-0.3, 0.1, 0.2};
+
+            var vmat_data = [_]T {
+                0.5, -0.5,
+                -0.3, -0.2,
+            };
+
+            var vvec_data = [_]T {0.1, 0.0};
+
+            var query: [30]T = undefined;
+            var key: [30]T = undefined;
+            var value: [20]T = undefined;
+            var out: [20]T = undefined;
+            var score: [100]T = undefined;
+
+            pub var att = Attention(T) {
+                .header = mhatt_header.toAttentionHeader(),
+                .query_matrix = Matrix(T) {
+                    .capacity = 6,
+                    .width = 2,
+                    .height = 3,
+                    .ptr = &qmat_data,
+                },
+                .query_vect = &qvec_data,
+                .key_matrix = Matrix(T) {
+                    .capacity = 6,
+                    .width = 2,
+                    .height = 3,
+                    .ptr = &kmat_data,
+                },
+                .key_vect = &kvec_data,
+                .value_matrix = Matrix(T) {
+                    .capacity = 2,
+                    .width = 2,
+                    .height = 2,
+                    .ptr = &vmat_data,
+                },
+                .value_vect = &vvec_data,
+                .key = Matrix(T) {
+                    .capacity = 30,
+                    .width = 3,
+                    .height = 10,
+                    .ptr = &key,
+                },
+                .query = Matrix(T) {
+                    .capacity = 30,
+                    .width = 3,
+                    .height = 10,
+                    .ptr = &query,
+                },
+                .value = Matrix(T) {
+                    .capacity = 20,
+                    .width = 2,
+                    .height = 10,
+                    .ptr = &value
+                },
+                .score = Matrix(T) {
+                    .capacity = 100,
+                    .width = 10,
+                    .height = 10,
+                    .ptr = &score,
+                },
+                .out = Matrix(T) {
+                    .capacity = 20,
+                    .width = 2,
+                    .height = 10,
+                    .ptr = &out,
+                },
+            };
+
+            pub const expected_out = [10]T {
+                0.4372611895, -1.153090062, 
+                0.521449242,  -1.102414468, 
+                0.3627843846, -1.176291358, 
+                0.402549217,  -1.195240529, 
+                0.4014339047, -1.180414241, 
+            };
+
+            // // for deeper testing
+            //
+            // pub const expected_query = [15]T {
+            //     -0.4,  0.1,  0.3,
+            //     -1.3,  1.2, -0.3,
+            //      0,   -0.3,  0.5,
+            //      0.4, -1.1,  1 , 
+            //      0.1, -0.6,  0.7, 
+            // };
+            //
+            // pub const expected_key = [15]T {
+            //     0.5, -1.1, -5.551115123e-17,
+            //     1.2, -1.6, -1.000000000e0,
+            //     0.1, -0.7,  4.000000000e-1,
+            //     0.1, -1.1,  1.000000000e0,
+            //     0.2, -1,    6.000000000e-1,
+            // };
+            //
+            // pub const expected_value = [10]T {
+            //     -0.4, -2.9,  0.6,  2.1,  1.1, 
+            //     -1.2, -1.7, -0.8, -1.2, -1.1, 
+            // };
+            //
+            // pub const expected_score = [25]T {
+            //     0.1852475402, 0.1287615593,  0.2228380049, 0.2415977396, 0.2215551559,
+            //     0.1816634986, 0.09033836584, 0.3019387867, 0.2062673465, 0.2197920024,
+            //     0.1863010496, 0.1522145924,  0.1951077428, 0.2486482,    0.2177284152,
+            //     0.1766863961, 0.160168573,   0.1574182591, 0.2869622327, 0.2187645391,
+            //     0.1818104975, 0.1502708502,  0.1818104975, 0.2661383004, 0.2199698543,
+            // };
+        };
+
+        pub const head2 = struct {
+            var qmat_data = [_]T {
+                0.2, -0.7,
+                -0.5, 0.4,
+                0.6, -0.18,
+            };
+
+            var qvec_data = [_]T {0.012, 0.321, 0.142};
+
+            var kmat_data = [_]T {
+                -0.1, 0.322,
+                0.553, -0.142,
+                -0.522, -0.322,
+            };
+
+            var kvec_data = [_]T {-0.33, 0.21, -0.12};
+
+            var vmat_data = [_]T {
+                0.53, -0.15,
+                -0.32, 0.22,
+            };
+
+            var vvec_data = [_]T {0.2, -0.01};
+
+            var query: [30]T = undefined;
+            var key: [30]T = undefined;
+            var value: [20]T = undefined;
+            var out: [20]T = undefined;
+            var score: [100]T = undefined;
+
+            pub var att = Attention(T) {
+                .header = mhatt_header.toAttentionHeader(),
+                .query_matrix = Matrix(T) {
+                    .capacity = 6,
+                    .width = 2,
+                    .height = 3,
+                    .ptr = &qmat_data,
+                },
+                .query_vect = &qvec_data,
+                .key_matrix = Matrix(T) {
+                    .capacity = 6,
+                    .width = 2,
+                    .height = 3,
+                    .ptr = &kmat_data,
+                },
+                .key_vect = &kvec_data,
+                .value_matrix = Matrix(T) {
+                    .capacity = 2,
+                    .width = 2,
+                    .height = 2,
+                    .ptr = &vmat_data,
+                },
+                .value_vect = &vvec_data,
+                .key = Matrix(T) {
+                    .capacity = 30,
+                    .width = 3,
+                    .height = 10,
+                    .ptr = &key,
+                },
+                .query = Matrix(T) {
+                    .capacity = 30,
+                    .width = 3,
+                    .height = 10,
+                    .ptr = &query,
+                },
+                .value = Matrix(T) {
+                    .capacity = 20,
+                    .width = 2,
+                    .height = 10,
+                    .ptr = &value
+                },
+                .score = Matrix(T) {
+                    .capacity = 100,
+                    .width = 10,
+                    .height = 10,
+                    .ptr = &score,
+                },
+                .out = Matrix(T) {
+                    .capacity = 20,
+                    .width = 2,
+                    .height = 10,
+                    .ptr = &out,
+                },
+            };
+
+            pub const expected_out = [10]T {
+                1.7010108058806597e0,   -8.092955826902519e-1,
+                2.2202788468064205e0,   -1.213068110898836e0,
+                1.2151169366970755e0,   -3.8070070180296456e-1,
+                5.663922428419284e-1,   2.4896039342777504e-1,
+                1.049237434657965e0,    -2.367536075651379e-1,
+
+            };
+        };
+
+        var att_res: [40]T = undefined;
+
+        const mhatt = MHAttention(T) {
+            .header = mhatt_header,
+            .attentions = &[2]MHAttention(T) {head1.att, head2.att},
+            .att_results = Matrix(T) {
+                .capacity = 40,
+                .height = 20,
+                .width = 2,
+                .ptr = &att_res,
+            },
+            .comb_matrix = Matrix(T) {
+                .capacity = 20,
+            },
+        };
+
     };
 }
 

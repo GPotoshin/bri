@@ -99,9 +99,10 @@ pub fn EncodeLayer(comptime T: type) type {
         const testData = @import("test.zig").encoderData(T);
 
         test compute {
-            const allocator = std.testing.allocator;
-            const encodeLayer = try EncodeLayer(T).init(allocator, testData.big_el_header);
-            encodeLayer.destroy(allocator);
+            try testData.head1.att.compute(testData.ctx, testData.ctx, .bidirectional);
+            
+            try @import("test.zig").compare_delta(T, &testData.head1.expected_out,
+                testData.head1.att.out.toSlice(), 0.0000001);
         }
     };
 }

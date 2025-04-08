@@ -441,6 +441,7 @@ pub fn softmax(comptime T: type, mat: Matrix(T)) void {
             v.* = @exp(v.*);
             sum += v.*;
         }
+
         for (vect) |*v| {
             v.* = v.*/sum;
         }
