@@ -167,6 +167,15 @@ pub fn Matrix(comptime T: type) type {
             .ptr = null,
         };
 
+        pub fn fromSlice(slice: []T, height: u32, width: u32) Self {
+            return Matrix(T) {
+                .capacity = slice.len,
+                .height = height,
+                .width = width,
+                .ptr = slice.ptr,
+            };
+        }
+
 // ---------------------------- TESTS --------------------------------------
         test init {
             var mat = try Matrix(T).init(std.testing.allocator, 10, 10);

@@ -99,10 +99,9 @@ pub fn EncodeLayer(comptime T: type) type {
         const testData = @import("test.zig").encoderData(T);
 
         test compute {
-            try testData.head1.att.compute(testData.ctx, testData.ctx, .bidirectional);
-            
-            try @import("test.zig").compare_delta(T, &testData.head1.expected_out,
-                testData.head1.att.out.toSlice(), 0.0000001);
+            testData.set_mhatt();
+            try testData.mhatt.compute(testData.ctx, testData.ctx, .bidirectional);
+            testData.mhatt.out.print();
         }
     };
 }

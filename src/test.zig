@@ -1,16 +1,21 @@
 const std = @import("std");
-const mhatt = @import("mhattention.zig");
+const mha = @import("mhattention.zig");
 const att = @import("attention.zig");
 const mtx = @import("matrix.zig"); 
 const enc = @import("encoder.zig");
+const lan = @import("layernorm.zig");
+const mlp = @import("multilayerpreceptron.zig");
 
 const Attention = att.Attention;
 const AttentionHeader = att.AttentionHeader;
-const MHAttention = mhatt.MHAttention;
+const MHAttention = mha.MHAttention;
 const MHAttentionHeader = mhatt.MHAttentionHeader;
 const EncodeLayer = enc.EncodeLayer;
 const EncodeLayerHeader = enc.EncodeLayerHeader;
 const Matrix = mtx.Matrix;
+const LayerNorm = lan.LayerNorm;
+const MLP = mlp.MultilayerPreceptron;
+const MLPHeader = mlp.MultilayerPreceptronHeader;
 
 pub fn mhattData(comptime T: type) type {
     return struct {
@@ -206,9 +211,6 @@ pub fn mhattData(comptime T: type) type {
                 a.out.capacity = 28;
             }
         }
-
-
-        // testing encoder
     };
 }
 
@@ -280,7 +282,6 @@ pub fn encoderData(comptime T: type) type {
             var query: [30]T = undefined;
             var key: [30]T = undefined;
             var value: [20]T = undefined;
-            var out: [20]T = undefined;
             var score: [100]T = undefined;
 
             pub var att = Attention(T) {
@@ -334,11 +335,11 @@ pub fn encoderData(comptime T: type) type {
                     .capacity = 20,
                     .width = 2,
                     .height = 10,
-                    .ptr = &out,
+                    .ptr = (&att_res)[0..20],
                 },
             };
 
-            pub const expected_out = [10]T {
+            pub var expected_out = [10]T {
                 0.4372611895, -1.153090062, 
                 0.521449242,  -1.102414468, 
                 0.3627843846, -1.176291358, 
@@ -405,7 +406,6 @@ pub fn encoderData(comptime T: type) type {
             var query: [30]T = undefined;
             var key: [30]T = undefined;
             var value: [20]T = undefined;
-            var out: [20]T = undefined;
             var score: [100]T = undefined;
 
             pub var att = Attention(T) {
@@ -459,11 +459,11 @@ pub fn encoderData(comptime T: type) type {
                     .capacity = 20,
                     .width = 2,
                     .height = 10,
-                    .ptr = &out,
+                    .ptr = (&att_res)[20..40],
                 },
             };
 
-            pub const expected_out = [10]T {
+            pub var expected_out = [10]T {
                 1.7010108058806597e0,   -8.092955826902519e-1,
                 2.2202788468064205e0,   -1.213068110898836e0,
                 1.2151169366970755e0,   -3.8070070180296456e-1,
@@ -474,10 +474,26 @@ pub fn encoderData(comptime T: type) type {
         };
 
         var att_res: [40]T = undefined;
+        var comb_mat = [8]T {
+            0.2, 0.1,
+            -0.2, -0.1,
 
-        const mhatt = MHAttention(T) {
+            -0.2, 0.1,
+            0.2, -0.1,
+        };
+        var comb_vect = [2]T {-0.1, 0.2};
+        var out: [20]T = undefined;
+
+        var attentions: [2]Attention(T) = undefined;
+        
+        pub fn set_mhatt() void {
+            attentions[0] = head1.att;
+            attentions[1] = head2.att;
+        }
+
+        pub var mhatt = MHAttention(T) {
             .header = mhatt_header,
-            .attentions = &[2]MHAttention(T) {head1.att, head2.att},
+            .attentions = &attentions,
             .att_results = Matrix(T) {
                 .capacity = 40,
                 .height = 20,
@@ -485,7 +501,65 @@ pub fn encoderData(comptime T: type) type {
                 .ptr = &att_res,
             },
             .comb_matrix = Matrix(T) {
+                .capacity = 8,
+                .width = 2,
+                .height = 4,
+                .ptr = &comb_mat,
+            },
+            .comb_vect = &comb_vect,
+            .out = Matrix(T) {
                 .capacity = 20,
+                .height = 10,
+                .width = 2,
+                .ptr = &out,
+            },
+        };
+
+        pub const expected_out = [_]T {
+            -5.489884888827613e-1,  6.489884888827613e-1,
+            -6.713141800568219e-1,  7.71314180056822e-1,
+            -4.26165717295922e-1,   5.26165717295922e-1,
+            -2.2739661987151033e-1, 3.2739661987151036e-1,
+            -3.712774919032714e-1,  4.712774919032714e-1,
+        };
+
+        var beta1 = [_]T {-0.1, 0.1};
+        var gamma1 = [_]T {0.0, 0.2};
+
+        var mlp_mat1 = [_]T {
+            1.2, 0.4,
+            -1.0, 0.8,
+            1.1, 2.4,
+            0.2, -3.4,
+            -1.2, -0.4,
+        };
+
+        var mlp_mat2 = [_] T {
+            3.3, 2.0, 0.1, 0.2, -0.2,
+            -0.9, -7.7, 2.3, 0.3, 0.0,
+        };
+
+        pub var encodeLayer = EncodeLayer(T) {
+            .header = test_el_header,
+            .mhattention = mhatt,
+            .layer_norm1 = LayerNorm(T) {
+                .beta = &beta1,
+                .gamma = &gamma1,
+            },
+            .preceptron = MLP(T) {
+                .header = test_el_header.toMHAttentionHeader(),
+                .mat1 = Matrix(T) {
+                    .capacity = 10,
+                    .height = 5,
+                    .width = 2,
+                    .ptr = &mlp_mat1,
+                },
+                .mat2 = Matrix(T) {
+                    .capacity = 10,
+                    .height = 2,
+                    .width = 5,
+                    .ptr = &mlp_mat2,
+                },
             },
         };
 
