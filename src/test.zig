@@ -9,7 +9,7 @@ const mlp = @import("multilayerpreceptron.zig");
 const Attention = att.Attention;
 const AttentionHeader = att.AttentionHeader;
 const MHAttention = mha.MHAttention;
-const MHAttentionHeader = mhatt.MHAttentionHeader;
+const MHAttentionHeader = mha.MHAttentionHeader;
 const EncodeLayer = enc.EncodeLayer;
 const EncodeLayerHeader = enc.EncodeLayerHeader;
 const Matrix = mtx.Matrix;
@@ -284,7 +284,7 @@ pub fn encoderData(comptime T: type) type {
             var value: [20]T = undefined;
             var score: [100]T = undefined;
 
-            pub var att = Attention(T) {
+            pub const att = Attention(T) {
                 .header = mhatt_header.toAttentionHeader(),
                 .query_matrix = Matrix(T) {
                     .capacity = 6,
@@ -301,7 +301,7 @@ pub fn encoderData(comptime T: type) type {
                 },
                 .key_vect = &kvec_data,
                 .value_matrix = Matrix(T) {
-                    .capacity = 2,
+                    .capacity = 4,
                     .width = 2,
                     .height = 2,
                     .ptr = &vmat_data,
@@ -335,7 +335,7 @@ pub fn encoderData(comptime T: type) type {
                     .capacity = 20,
                     .width = 2,
                     .height = 10,
-                    .ptr = (&att_res)[0..20],
+                    .ptr = undefined,
                 },
             };
 
@@ -403,12 +403,7 @@ pub fn encoderData(comptime T: type) type {
 
             var vvec_data = [_]T {0.2, -0.01};
 
-            var query: [30]T = undefined;
-            var key: [30]T = undefined;
-            var value: [20]T = undefined;
-            var score: [100]T = undefined;
-
-            pub var att = Attention(T) {
+            pub const att = Attention(T) {
                 .header = mhatt_header.toAttentionHeader(),
                 .query_matrix = Matrix(T) {
                     .capacity = 6,
@@ -425,42 +420,17 @@ pub fn encoderData(comptime T: type) type {
                 },
                 .key_vect = &kvec_data,
                 .value_matrix = Matrix(T) {
-                    .capacity = 2,
+                    .capacity = 4,
                     .width = 2,
                     .height = 2,
                     .ptr = &vmat_data,
                 },
                 .value_vect = &vvec_data,
-                .key = Matrix(T) {
-                    .capacity = 30,
-                    .width = 3,
-                    .height = 10,
-                    .ptr = &key,
-                },
-                .query = Matrix(T) {
-                    .capacity = 30,
-                    .width = 3,
-                    .height = 10,
-                    .ptr = &query,
-                },
-                .value = Matrix(T) {
-                    .capacity = 20,
-                    .width = 2,
-                    .height = 10,
-                    .ptr = &value
-                },
-                .score = Matrix(T) {
-                    .capacity = 100,
-                    .width = 10,
-                    .height = 10,
-                    .ptr = &score,
-                },
-                .out = Matrix(T) {
-                    .capacity = 20,
-                    .width = 2,
-                    .height = 10,
-                    .ptr = (&att_res)[20..40],
-                },
+                .key = undefined,
+                .query = undefined,
+                .value = undefined,
+                .score = undefined,
+                .out = undefined,
             };
 
             pub var expected_out = [10]T {
@@ -473,7 +443,6 @@ pub fn encoderData(comptime T: type) type {
             };
         };
 
-        var att_res: [40]T = undefined;
         var comb_mat = [8]T {
             0.2, 0.1,
             -0.2, -0.1,
@@ -484,22 +453,12 @@ pub fn encoderData(comptime T: type) type {
         var comb_vect = [2]T {-0.1, 0.2};
         var out: [20]T = undefined;
 
-        var attentions: [2]Attention(T) = undefined;
-        
-        pub fn set_mhatt() void {
-            attentions[0] = head1.att;
-            attentions[1] = head2.att;
-        }
+        var attentions = [2]Attention(T) {head1.att, head2.att};
 
-        pub var mhatt = MHAttention(T) {
+        pub const mhatt = MHAttention(T) {
             .header = mhatt_header,
             .attentions = &attentions,
-            .att_results = Matrix(T) {
-                .capacity = 40,
-                .height = 20,
-                .width = 2,
-                .ptr = &att_res,
-            },
+            .att_results = undefined,
             .comb_matrix = Matrix(T) {
                 .capacity = 8,
                 .width = 2,
@@ -511,7 +470,7 @@ pub fn encoderData(comptime T: type) type {
                 .capacity = 20,
                 .height = 10,
                 .width = 2,
-                .ptr = &out,
+                .ptr = undefined,
             },
         };
 
@@ -534,10 +493,17 @@ pub fn encoderData(comptime T: type) type {
             -1.2, -0.4,
         };
 
+        var mlp_vec1 = [_]T {-0.3, -0.2, -0.1, 0.0, -0.1 };
+
         var mlp_mat2 = [_] T {
             3.3, 2.0, 0.1, 0.2, -0.2,
             -0.9, -7.7, 2.3, 0.3, 0.0,
         };
+
+        var mlp_vec2 = [_]T {-0.1, -0.1};
+
+        var beta2 = [_]T {0.1, -0.1};
+        var gamma2 = [_]T {0.12, 0.21};
 
         pub var encodeLayer = EncodeLayer(T) {
             .header = test_el_header,
@@ -547,7 +513,7 @@ pub fn encoderData(comptime T: type) type {
                 .gamma = &gamma1,
             },
             .preceptron = MLP(T) {
-                .header = test_el_header.toMHAttentionHeader(),
+                .header = test_el_header.toMLPHeader(),
                 .mat1 = Matrix(T) {
                     .capacity = 10,
                     .height = 5,
@@ -560,6 +526,14 @@ pub fn encoderData(comptime T: type) type {
                     .width = 5,
                     .ptr = &mlp_mat2,
                 },
+                .vec1 = &mlp_vec1,
+                .vec2 = &mlp_vec2,
+                .mid = undefined,
+                .out = undefined,
+            },
+            .layer_norm2 = LayerNorm(T) {
+                .beta = &beta2,
+                .gamma = &gamma2,
             },
         };
 

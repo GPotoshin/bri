@@ -19,43 +19,43 @@ pub const MHAttentionHeader = struct {
     const Self = @This();
     pub fn write(self: Self, writer: anytype) !void {
         writer.writeInt(u32, self.version, .little) catch |e| {
-            std.log.err("Can't write version\n", .{});
+            std.log.err("can't write version\n", .{});
             return e;
         };
         writer.writeInt(u32, self.type_len, .little) catch |e| {
-            std.log.err("Can't write type_size\n", .{});
+            std.log.err("can't write type_size\n", .{});
             return e;
         };
         writer.writeInt(u32, self.heads, .little) catch |e| {
-            std.log.err("Can't write heads\n", .{});
+            std.log.err("can't write heads\n", .{});
             return e;
         };
         writer.writeInt(u32, self.seq_dim, .little) catch |e| {
-            std.log.err("Can't write seq_dim\n", .{});
+            std.log.err("can't write seq_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.ctx_dim, .little) catch |e| {
-            std.log.err("Can't write ctx_dim\n", .{});
+            std.log.err("can't write ctx_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.att_dim, .little) catch |e| {
-            std.log.err("Can't write att_dim\n", .{});
+            std.log.err("can't write att_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.mid_dim, .little) catch |e| {
-            std.log.err("Can't write mid_dim\n", .{});
+            std.log.err("can't write mid_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.out_dim, .little) catch |e| {
-            std.log.err("Can't write out_dim\n", .{});
+            std.log.err("can't write out_dim\n", .{});
             return e;
         };
         writer.writeInt(u32, self.max_seq_len, .little) catch |e| {
-            std.log.err("Can't write max_seq_len\n", .{});
+            std.log.err("can't write max_seq_len\n", .{});
             return e;
         };
         writer.writeInt(u32, self.max_ctx_len, .little) catch |e| {
-            std.log.err("Can't write seq_dim\n", .{});
+            std.log.err("can't write seq_dim\n", .{});
             return e;
         };
     }
@@ -158,12 +158,6 @@ pub fn MHAttention(comptime T: type) type {
         pub fn init(allocator: std.mem.Allocator, header: MHAttentionHeader, out: Matrix(T)) !Self {    
             var retval: Self = undefined;
 
-            // maybe change the number of parameters passed?
-            if (out.height != header.max_seq_len or out.width != header.out_dim) {
-                std.log.err("Wrong dimensions for output matrix for MHAttension\n", .{});
-                return error.DataConflict;
-            }
-
             retval.header = header;
 
             retval.attentions = try allocator.alloc(Attention(T), header.heads);
@@ -236,7 +230,7 @@ pub fn MHAttention(comptime T: type) type {
             };
         }
 
-        pub fn writeWeights(self: *Self, writer: anytype) !void {
+        pub fn writeWeights(self: Self, writer: anytype) !void {
             for (self.attentions) |*a| {
                 a.writeWeights(writer) catch |e| {
                     std.log.err("Can't write an attetion block\n", .{});

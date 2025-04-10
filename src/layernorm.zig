@@ -16,6 +16,13 @@ pub fn LayerNorm(comptime T: type) type {
             };
         }
 
+        pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.gamma);
+            self.gamma.len = 0;
+            allocator.free(self.beta);
+            self.beta.len = 0;
+        }
+
         pub fn apply(self: Self, mat: Matrix(T)) void {
             const dim: T = @floatFromInt(mat.width);
             for (0..mat.height) |i| {
@@ -93,14 +100,9 @@ pub fn LayerNorm(comptime T: type) type {
 
             layer.apply(mat);
 
-            try std.testing.expect(@abs(mat.ptr[0]-1.658359214)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[1]-2.447213595)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[2]-4)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[3]-14.41640786)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[4]-3.140028008)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[5]-0.7397479244)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[6]-4)<0.00001); 
-            try std.testing.expect(@abs(mat.ptr[7]-2.400280084)<0.00001); 
+            const expected = [_]T {1.658359214, 2.447213595, 4, 14.41640786,
+                3.140028008, 0.7397479244, 4, 2.400280084};
+            try @import("test.zig").compare_delta(T, &expected, mat.toSlice(), 0.0001);
 
         }
     };

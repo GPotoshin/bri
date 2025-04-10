@@ -99,7 +99,7 @@ pub fn MultilayerPreceptron(comptime T: type) type {
         pub fn allocateFromHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.mat1 = try Matrix(T).init(allocator, self.header.mid_dim, self.header.in_dim);
             self.vec1 = try allocator.alloc(T, self.header.mid_dim);
-            self.mid = try Matrix(T).init(allocator, self.header.mid_dim);
+            self.mid = try Matrix(T).init(allocator, self.header.max_seq_len, self.header.mid_dim);
             self.mat2 = try Matrix(T).init(allocator, self.header.out_dim, self.header.mid_dim);
             self.vec2 = try allocator.alloc(T, self.header.out_dim);
         }
@@ -110,6 +110,7 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             self.mid.destroy(allocator);
             self.mat1.destroy(allocator);
             allocator.free(self.vec2);
+            self.mat2.destroy(allocator);
         }
 
         pub fn readWeights(self: Self, reader: anytype) !void {
@@ -125,7 +126,7 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             };
             self.mat2.read(reader) catch |e| {
                 std.log.err("can't read second matrix ({}x{}) {}\n",
-                    .{self.mat2.height, self.query_matrix.width, T});
+                    .{self.mat2.height, self.mat2.width, T});
                 return e;
             };
             mtx.readVector(T, reader, self.vec2) catch |e| {
@@ -148,7 +149,7 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             };
             self.mat2.write(writer) catch |e| {
                 std.log.err("can't write second matrix ({}x{}) {}\n",
-                    .{self.mat2.height, self.query_matrix.width, T});
+                    .{self.mat2.height, self.mat2.width, T});
                 return e;
             };
             mtx.writeVector(T, writer, self.vec2) catch |e| {
@@ -228,12 +229,9 @@ pub fn MultilayerPreceptron(comptime T: type) type {
 
             try mlp.compute(testseq);
 
-            try std.testing.expect(@abs(mlp.out.ptr[0]-4.91) < 0.000001);
-            try std.testing.expect(@abs(mlp.out.ptr[1]-13.63) < 0.000001);
-            try std.testing.expect(@abs(mlp.out.ptr[2]-23.05) < 0.000001);
-            try std.testing.expect(@abs(mlp.out.ptr[3]-2.66) < 0.000001);
-            try std.testing.expect(@abs(mlp.out.ptr[4]-(-1.38)) < 0.000001);
-            try std.testing.expect(@abs(mlp.out.ptr[5]-(-0.59)) < 0.000001);
+            const expected = [_]T {4.91, 13.63, 23.05, 2.66, -1.38, -0.59};
+            try @import("test.zig").compare_delta(T, &expected, mlp.out.toSlice(), 0.00001);
+
         }
     };
 }
