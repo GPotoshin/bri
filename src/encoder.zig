@@ -134,6 +134,19 @@ pub fn EncodeLayer(comptime T: type) type {
             return retval;
         }
 
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (
+                std.meta.eql(self.header, expected.header) and
+                self.mhattention.isEqualTo(expected.mhattention, delta) and
+                self.layer_norm1.isEqualTo(expected.layer_norm1, delta) and
+                self.preceptron.isEqualTo(expected.preceptron, delta) and
+                self.layer_norm2.isEqualTo(expected.layer_norm2, delta)
+            ) {
+                return true;
+            }
+            return false;
+        }
+
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.mhattention = try MHAttention(T).init(allocator, self.header.toMHAttentionHeader(), Matrix(T).empty);
             self.layer_norm1 = try LayerNorm(T).init(allocator, self.header.ctx_dim);
@@ -148,32 +161,33 @@ pub fn EncodeLayer(comptime T: type) type {
             self.layer_norm2.destroy(allocator);
         }
 
-        pub fn compute(self: Self, ctx: Matrix(T)) !void {
+        pub fn compute(self: *Self, ctx: Matrix(T)) !void {
             self.mhattention.out = ctx;
             try self.mhattention.compute(ctx, ctx, .bidirectional);   
-            try self.layer_norm1.apply(ctx);
+            self.layer_norm1.apply(ctx);
             try self.preceptron.compute(ctx); // outputs should be set to them selfs
-            try self.layer_norm2.apply(ctx);
+            self.layer_norm2.apply(ctx);
         }
 
         pub fn writeWeights(self: Self, writer: anytype) !void {
             try self.mhattention.writeWeights(writer);
             try self.layer_norm1.writeWeights(writer);
             try self.preceptron.writeWeights(writer);
-            try self.layer_norm1.writeWeights(writer);
+            try self.layer_norm2.writeWeights(writer);
         }
 
         pub fn readWeights(self: *Self, reader: anytype) !void {
             try self.mhattention.readWeights(reader);
             try self.layer_norm1.readWeights(reader);
             try self.preceptron.readWeights(reader);
-            try self.layer_norm1.readWeights(reader);
+            try self.layer_norm2.readWeights(reader);
         }
         
         const testData = @import("test.zig").encoderData(T);
 
         test writeWeights {
             const file = try std.fs.cwd().openFile("test_files/test_encodelayer", .{.mode = .write_only});
+            defer file.close();
             const writer = file.writer();
             try testData.encodeLayer.header.write(writer);
             try testData.encodeLayer.writeWeights(writer);
@@ -181,18 +195,26 @@ pub fn EncodeLayer(comptime T: type) type {
         }
 
         test readWeights {
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
             const file = try std.fs.cwd().openFile("test_files/test_encodelayer", .{.mode = .read_only});
+            defer file.close();
             const reader = file.reader();
+
             var enc_layer: EncodeLayer(T) = undefined;
             try enc_layer.header.read(reader);
             try enc_layer.allocateForHeader(allocator);
-            defer enc_layer.destroy(allocator);
             try enc_layer.readWeights(reader);
 
-            const compare_delta = @import("test.zig").compare_delta;
-            try compare_delta(T, testData.encodeLayer.mhattention.comb_matrix.toSlice(),
-                enc_layer.mhattention.comb_matrix.toSlice(), 0.0001);
+            try std.testing.expect(enc_layer.isEqualTo(testData.encodeLayer, 0.000001));
+        }
+
+        test compute {
+            var ctx = try testData.ctx.copy(std.testing.allocator);
+            defer ctx.destroy(std.testing.allocator);
+            try testData.encodeLayer.compute(testData.ctx);
         }
     };
 }

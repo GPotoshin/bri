@@ -16,6 +16,16 @@ pub fn LayerNorm(comptime T: type) type {
             };
         }
 
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (
+                mtx.compareVectorDelta(T, self.gamma, expected.gamma, delta) and
+                mtx.compareVectorDelta(T, self.beta, expected.beta, delta)
+            ) {
+                return true;
+            }
+            return false;
+        }
+
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
             allocator.free(self.gamma);
             self.gamma.len = 0;
@@ -84,7 +94,6 @@ pub fn LayerNorm(comptime T: type) type {
             };
 
             const mat = Matrix(T) {
-                .capacity = 8, 
                 .height = 2,
                 .width = 4,
                 .ptr = &cont,
@@ -102,7 +111,7 @@ pub fn LayerNorm(comptime T: type) type {
 
             const expected = [_]T {1.658359214, 2.447213595, 4, 14.41640786,
                 3.140028008, 0.7397479244, 4, 2.400280084};
-            try @import("test.zig").compare_delta(T, &expected, mat.toSlice(), 0.0001);
+            try std.testing.expect(mtx.compareVectorDelta(T, &expected, mat.toSlice(), 0.0001));
 
         }
     };

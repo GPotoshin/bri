@@ -7,11 +7,17 @@ const Attention = att.Attention;
 pub const MHAttentionHeader = struct {
     version: u32,
     type_len: u32,
+    /// number of heads, attention blocks, they are run in parallel?
     heads: u32,
+    /// dimension of imput sequence
     seq_dim: u32,
+    /// dimension of context sequence
     ctx_dim: u32,
+    /// middle dimension of attention blocks
     att_dim: u32,
+    /// output dimension of attention blocks
     mid_dim: u32,
+    /// output dimension of multihead attention
     out_dim: u32,
     max_seq_len: u32,
     max_ctx_len: u32,
@@ -149,6 +155,7 @@ pub fn MHAttention(comptime T: type) type {
 
         attentions: []Attention(T),
         att_results: Matrix(T),
+        /// height: out_dim*heads, width: mid_dimension 
         comb_matrix: Matrix(T),
         comb_vect: []T,
 
@@ -184,6 +191,26 @@ pub fn MHAttention(comptime T: type) type {
             retval.out = out;
 
             return retval;
+        }
+
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (!(
+                std.meta.eql(expected.header, self.header) and
+                expected.attentions.len == self.attentions.len and
+                self.comb_matrix.isEqualTo(expected.comb_matrix, delta) and
+                mtx.compareVectorDelta(T, self.comb_vect, expected.comb_vect, delta)
+            )) {
+                return false;
+            }
+
+
+            for (self.attentions, expected.attentions) |a, e| {
+                if (!a.isEqualTo(e, delta)) {
+                    return false;
+                }
+            }
+            return true;
+
         }
 
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
@@ -341,7 +368,9 @@ pub fn MHAttention(comptime T: type) type {
         }
 
         test readWeights {
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
 
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
             defer file.close();
@@ -350,78 +379,79 @@ pub fn MHAttention(comptime T: type) type {
             var mhatt: MHAttention(T) = undefined;
             try mhatt.header.read(reader);
             try mhatt.allocateForHeader(allocator);
-            defer mhatt.destroy(allocator);
             try mhatt.readWeights(reader);
 
 
             // testing header data
             try std.testing.expectEqualDeep(testData.test_mhatt_header, mhatt.header);
-            try std.testing.expectEqualDeep(testData.test_att1_header, mhatt.attentions[2].header);
+            for (mhatt.attentions) |a| {
+                try std.testing.expectEqualDeep(testData.att_header, a.header);
+            }
 
             // testing wights data
-            try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
-                &testData.test_att1_cont1);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
-                &testData.test_att1_cont2);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
-                &testData.test_att1_cont3);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
-                &testData.test_att1_cont4);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
-                &testData.test_att1_cont5);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
-                &testData.test_att1_cont6);
-            try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
-                &testData.test_comb_mat_data);
-            try std.testing.expectEqualSlices(T, mhatt.comb_vect,
-                &testData.com_vec_data);
+            try std.testing.expect(mhatt.isEqualTo(testData.test_mhatt, 0.0000001));
         }
 
         test initFromFile {
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
 
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
             defer file.close();
             var mhatt = try MHAttention(T).initFromFile(allocator, file);
-            defer mhatt.destroy(allocator);
 
+            try std.testing.expect(mhatt.isEqualTo(testData.test_mhatt, 0.000001));
+        }
 
-            // testing header data
-            try std.testing.expectEqualDeep(testData.test_mhatt_header, mhatt.header);
-            try std.testing.expectEqualDeep(testData.test_att1_header, mhatt.attentions[2].header);
+        pub fn checkWeightDimensions(self: Self) !void {
+            if (self.attentions.len != self.header.heads) {
+                std.debug.print("Number of attentionns differs from the heads number in header\n", .{});
+                return error.IncompatibleObjects;
+            }
 
-            // testing wights data
-            try std.testing.expectEqualSlices(T, mhatt.attentions[0].query_matrix.toSlice(),
-                &testData.test_att1_cont1);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[1].query_vect,
-                &testData.test_att1_cont2);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[2].key_matrix.toSlice(),
-                &testData.test_att1_cont3);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[3].key_vect,
-                &testData.test_att1_cont4);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[2].value_matrix.toSlice(),
-                &testData.test_att1_cont5);
-            try std.testing.expectEqualSlices(T, mhatt.attentions[1].value_vect,
-                &testData.test_att1_cont6);
-            try std.testing.expectEqualSlices(T, mhatt.comb_matrix.toSlice(),
-                &testData.test_comb_mat_data);
-            try std.testing.expectEqualSlices(T, mhatt.comb_vect,
-                &testData.com_vec_data);
+            const att_header = self.header.toAttentionHeader();
+            for (self.attentions, 0..) |a, i| {
+                if (!std.meta.eql(a.header, att_header)) {
+                    std.debug.print("Header of {}. attention head is not coherent with multihead attention header\n", .{i});
+                    return error.IncompatibleObjects;
+                }
+                a.checkWeightDimensions() catch |e| {
+                    std.debug.print("Wrong dimention in {}. attention\n", .{i});
+                    return e;
+                };
+            }
+
+            if (self.comb_matrix.width != self.header.mid_dim) {
+                std.debug.print("Width of query matrix differs from the middle dimension in mutlihead attention header\n", .{});
+                return error.IncompatibleObjects;
+
+            }
+
+            if (self.comb_matrix.height != self.header.out_dim * self.header.heads) {
+                std.debug.print("Height of query matrix differs from the product of out dimension and head number in mutlihead attention header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.comb_vect.len != self.header.out_dim) {
+                std.debug.print("Dimension of combination vector differs from the out dimension in multihead attention header\n", .{});
+                return error.IncompatibleObjects;
+            }
         }
 
         test compute {
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
 
             const file = try std.fs.cwd().openFile("test_files/test_mhattention", .{.mode = .read_only});
             defer file.close();
             var mhatt = try MHAttention(T).initFromFile(allocator, file);
-            defer mhatt.destroy(allocator);
             mhatt.out = testData.test_out_matrix;
 
             try mhatt.compute(testData.test_ctx, testData.test_seq, .bidirectional);
 
             // right results
-            try @import("test.zig").compare_delta(T, &testData.test_att1_answer_data, mhatt.out.toSlice(), 0.00001);
+            try std.testing.expect(mtx.compareVectorDelta(T, &testData.test_att1_answer_data, mhatt.out.toSlice(), 0.00001));
         }
     };
 }

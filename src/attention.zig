@@ -7,9 +7,13 @@ pub const AttentionHeader = struct {
 
     type_len: u32,
 
+    /// dimension of input sequence
     seq_dim: u32,
+    /// dimension of context sequence
     ctx_dim: u32,
+    /// middle dimension of attention blocks
     att_dim: u32,
+    /// dimension of output sequence
     out_dim: u32,
 
     max_seq_len: u32,
@@ -130,6 +134,21 @@ pub fn Attention(comptime T: type) type {
             return retval;
         }
 
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (
+                std.meta.eql(expected.header, self.header) and
+                self.query_matrix.isEqualTo(expected.query_matrix, delta) and
+                mtx.compareVectorDelta(T, expected.query_vect, self.query_vect, delta) and
+                self.key_matrix.isEqualTo(expected.key_matrix, delta) and
+                mtx.compareVectorDelta(T, expected.key_vect, self.key_vect, delta) and
+                self.value_matrix.isEqualTo(expected.value_matrix, delta) and
+                mtx.compareVectorDelta(T, expected.value_vect, self.value_vect, delta)
+            ) {
+                return true;
+            }
+            return false;
+        }
+
         /// allocates the memory for all weights with dimensions from it's header
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             const header = self.header;
@@ -146,6 +165,98 @@ pub fn Attention(comptime T: type) type {
             self.value_matrix = try Matrix(T).init(allocator, header.out_dim, header.ctx_dim);
             self.value_vect = try allocator.alloc(T, header.out_dim);
             self.value = try Matrix(T).init(allocator, header.out_dim, header.max_ctx_len);
+        }
+
+        pub fn checkWeightDimensions(self: Self) !void {
+            if (self.query_matrix.width != self.header.seq_dim) {
+                std.debug.print("Width of query matrix differs from the sequence dimension in attention header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.query_matrix.height != self.header.att_dim) {
+                std.debug.print("Height of query matrix differs from the attention dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.query_matrix.width*self.query_matrix.height > self.query_matrix.ptr.len) {
+                std.debug.print("Capacity of query matric is not sufficiently big\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.query_vect.len != self.header.att_dim) {
+                std.debug.print("Dimension of query vector differs from the attention dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+
+            if (self.key_matrix.width != self.header.ctx_dim) {
+                std.debug.print("Width of key matrix differs from the sequence dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.key_matrix.height != self.header.att_dim) {
+                std.debug.print("Height of key matrix differs from the attention dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.key_matrix.width*self.key_matrix.height > self.key_matrix.ptr.len) {
+                std.debug.print("Capacity of key matrix is not sufficiently big\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.key_vect.len != self.header.att_dim) {
+                std.debug.print("Dimension of key vector differs from the attention dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+
+            if (self.value_matrix.width != self.header.ctx_dim) {
+                std.debug.print("Width of value matrix differs from the sequence dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.value_matrix.height != self.header.out_dim) {
+                std.debug.print("Height of value matrix differs from the attention dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.value_matrix.width*self.value_matrix.height > self.value_matrix.ptr.len) {
+                std.debug.print("Capacity of value matric is not sufficiently big\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.value_vect.len != self.header.out_dim) {
+                std.debug.print("Dimension of value vector differs from the attention dimension in header\n", .{});
+                return error.IncompatibleObjects;
+            }
+        }
+
+        pub fn checkSeconderyFields(self: Self) !void {
+            if (self.query.height != self.header.max_seq_len) {
+                std.debug.print("Height of inner query matrix differs from maximum sequence length\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.query.width != self.header.att_dim) {
+                std.debug.print("Width of inner query matrix differs from attention dimention\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.query.ptr.len < self.query.width*self.query.height) {
+                std.debug.print("Capacity of inner query matric is not sufficiently big\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.key.height != self.header.max_ctx_len) {
+                std.debug.print("Height of inner key matrix differs from maximum context length\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.key.width != self.header.att_dim) {
+                std.debug.print("Height of inner key matrix differs from maximum context length\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.key.ptr.len < self.key.height*self.key.width) {
+                std.debug.print("Capacity of inner key matric is not sufficiently big\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.value.height != self.header.out_dim) {
+                std.debug.print("Height of inner value matrix differs from maximum context length\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.value.width != self.header.max_ctx_len) {
+                std.debug.print("Height of inner value matrix differs from maximum context length\n", .{});
+                return error.IncompatibleObjects;
+            }
+            if (self.value.ptr.len < self.value.height*self.value.width) {
+                std.debug.print("Capacity of inner value matric is not sufficiently big\n", .{});
+                return error.IncompatibleObjects;
+            }
         }
 
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
@@ -320,64 +431,90 @@ pub fn Attention(comptime T: type) type {
                 0,-1,-2,
             };
             var cont6 = [_]T {2, 4, 6, 8};
+
+            var att = Attention(T) {
+                .header = testData.header,
+
+                .query_matrix = Matrix(T) {
+                    .height = header.att_dim,
+                    .width = header.seq_dim,
+                    .ptr = &cont1,
+                },
+
+                .query_vect = &cont2,
+
+                .key_matrix = Matrix(T) {
+                    .height = header.att_dim,
+                    .width = header.ctx_dim,
+                    .ptr = &cont3,
+                },
+
+                .key_vect = &cont4,
+
+                .value_matrix = Matrix(T) {
+                    .height = header.out_dim,
+                    .width = header.ctx_dim,
+                    .ptr = &cont5,
+                },
+                .key = undefined,
+                .value = undefined,
+                .query = undefined,
+                .score = undefined,
+                .out = undefined,
+
+                .value_vect = &cont6,
+            };
         };
 
         test init {
-            const allocator = std.testing.allocator;
-            var out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
+            const out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
             var att = try Attention(T).init(allocator, testData.header, out);
-            att.destroy(allocator);
-            out.destroy(allocator);
+            try att.checkWeightDimensions();
+            try att.checkSeconderyFields();
+        }
+
+        test destroy {
+            const allocator = std.testing.allocator;
+
+            var out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
+            defer out.destroy(allocator);
+            var att = try Attention(T).init(allocator, testData.header, out);
+            defer att.destroy(allocator);
+            try att.checkWeightDimensions();
+            try att.checkSeconderyFields();
         }
         
         test allocateForHeader {
-            const allocator = std.testing.allocator;
-            var out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
+            const out = try Matrix(T).init(allocator, testData.header.max_seq_len, testData.header.out_dim);
             var att: Attention(T) = undefined;
             att.header = testData.header;
             att.out = out;
             try att.allocateForHeader(allocator);
-            att.destroy(allocator);
-            out.destroy(allocator);
         }
 
         test writeWeights {
             const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .write_only});
             const writer = file.writer();
 
-            try testData.header.write(writer);
+            try testData.att.header.write(writer);
 
-            var att: Attention(T) = undefined;
-            att.header = testData.header;
-
-            att.query_matrix.capacity = testData.header.att_dim*testData.header.seq_dim;
-            att.query_matrix.height = testData.header.att_dim;
-            att.query_matrix.width = testData.header.seq_dim;
-            att.query_matrix.ptr = &testData.cont1;
-
-            att.query_vect = &testData.cont2;
-
-            att.key_matrix.capacity = testData.header.att_dim*testData.header.ctx_dim;
-            att.key_matrix.height = testData.header.att_dim;
-            att.key_matrix.width = testData.header.ctx_dim;
-            att.key_matrix.ptr = &testData.cont3;
-
-            att.key_vect = &testData.cont4;
-
-            att.value_matrix.capacity = testData.header.out_dim*testData.header.ctx_dim;
-            att.value_matrix.height = testData.header.out_dim;
-            att.value_matrix.width = testData.header.ctx_dim;
-            att.value_matrix.ptr = &testData.cont5;
-
-            att.value_vect = &testData.cont6;
-
-            try att.writeWeights(writer);
+            try testData.att.writeWeights(writer);
             try file.setEndPos(try file.getPos());
             file.close();
         }
 
         test initFromFile {
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
             const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .read_only});
             const reader = file.reader();
 
@@ -389,24 +526,16 @@ pub fn Attention(comptime T: type) type {
             try att.allocateForHeader(allocator);
             try att.readWeights(reader);
 
-            try std.testing.expectEqualSlices(T, &testData.cont1, att.query_matrix.toSlice());
+            // @Todo: we are testing comparison functions
+            try std.testing.expect(att.isEqualTo(testData.att, 0.0001));
 
-            try std.testing.expectEqualSlices(T, &testData.cont2, att.query_vect);
-
-            try std.testing.expectEqualSlices(T, &testData.cont3, att.key_matrix.toSlice());
-
-            try std.testing.expectEqualSlices(T, &testData.cont4, att.key_vect);
-
-            try std.testing.expectEqualSlices(T, &testData.cont5, att.value_matrix.toSlice());
-
-            try std.testing.expectEqualSlices(T, &testData.cont6, att.value_vect);
-
-            att.destroy(allocator);
             file.close();
         }
 
         test readWeights {
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
             const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .read_only});
             const reader = file.reader();
 
@@ -418,19 +547,8 @@ pub fn Attention(comptime T: type) type {
             try att.allocateForHeader(allocator);
             try att.readWeights(reader);
 
-            try std.testing.expectEqualSlices(T, &testData.cont1, att.query_matrix.toSlice());
+            try std.testing.expect(att.isEqualTo(testData.att, 0.00001));
 
-            try std.testing.expectEqualSlices(T, &testData.cont2, att.query_vect);
-
-            try std.testing.expectEqualSlices(T, &testData.cont3, att.key_matrix.toSlice());
-
-            try std.testing.expectEqualSlices(T, &testData.cont4, att.key_vect);
-
-            try std.testing.expectEqualSlices(T, &testData.cont5, att.value_matrix.toSlice());
-
-            try std.testing.expectEqualSlices(T, &testData.cont6, att.value_vect);
-
-            att.destroy(allocator);
             file.close();
         }
 
@@ -441,7 +559,6 @@ pub fn Attention(comptime T: type) type {
                 0,-1,
             };
             const seq = Matrix(T) {
-                .capacity = 6,
                 .height = 3,
                 .width = 2,
                 .ptr = &seq_data,
@@ -453,13 +570,14 @@ pub fn Attention(comptime T: type) type {
             };
 
             const ctx = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &ctx_data,
             };
 
-            const allocator = std.testing.allocator;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
             const file = try std.fs.cwd().openFile("test_files/test_attention", .{.mode = .read_only});
             const reader = file.reader();
 
@@ -468,11 +586,9 @@ pub fn Attention(comptime T: type) type {
             try header.read(reader);
             att.header = header;
             try att.allocateForHeader(allocator);
-            defer att.destroy(allocator);
             try att.readWeights(reader);
 
             att.out = try Matrix(T).init(allocator, att.header.max_seq_len, att.header.out_dim);
-            defer att.out.destroy(allocator);
 
             try att.compute(ctx, seq, .bidirectional);
 

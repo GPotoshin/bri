@@ -89,6 +89,19 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             try self.out.addRow(self.vec2);
         } 
 
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (
+                std.meta.eql(self.header, expected.header) and
+                self.mat1.isEqualTo(expected.mat1, delta) and
+                mtx.compareVectorDelta(T, expected.vec1, self.vec1, delta) and
+                self.mat2.isEqualTo(expected.mat2, delta) and
+                mtx.compareVectorDelta(T, expected.vec2, self.vec2, delta)
+            ) {
+                return true;
+            }
+            return false;
+        }
+
         pub fn init(allocator: std.mem.Allocator, header: MultilayerPreceptronHeader) !Self {
             var retval: Self = undefined;
             retval.header = header;
@@ -105,7 +118,6 @@ pub fn MultilayerPreceptron(comptime T: type) type {
         }
 
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-            self.mat1.destroy(allocator);
             allocator.free(self.vec1);
             self.mid.destroy(allocator);
             self.mat1.destroy(allocator);
@@ -187,13 +199,11 @@ pub fn MultilayerPreceptron(comptime T: type) type {
                 },
 
                 .mat1 = Matrix(T) {
-                    .capacity = 6,
                     .height = 2,
                     .width = 3,
                     .ptr = &data1,
                 },
                 .mat2 = Matrix(T) {
-                    .capacity = 6,
                     .height = 3,
                     .width = 2,
                     .ptr = &data2,
@@ -202,14 +212,12 @@ pub fn MultilayerPreceptron(comptime T: type) type {
                 .vec2 = &vdata2,
 
                 .mid = Matrix(T) {
-                    .capacity = middata.len,
                     .height = 0,
                     .width = 0,
                     .ptr = &middata,
                 },
 
                 .out = Matrix(T) {
-                    .capacity = outdata.len,
                     .height = 0,
                     .width = 0,
                     .ptr = &outdata,
@@ -221,7 +229,6 @@ pub fn MultilayerPreceptron(comptime T: type) type {
                 -1, -2, -3,
             };
             const testseq = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &testdata,
@@ -230,7 +237,7 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             try mlp.compute(testseq);
 
             const expected = [_]T {4.91, 13.63, 23.05, 2.66, -1.38, -0.59};
-            try @import("test.zig").compare_delta(T, &expected, mlp.out.toSlice(), 0.00001);
+            try std.testing.expect(mtx.compareVectorDelta(T, &expected, mlp.out.toSlice(), 0.00001));
 
         }
     };

@@ -36,7 +36,6 @@ pub fn mhattData(comptime T: type) type {
             (big_mhatt_header.out_dim*big_mhatt_header.max_seq_len);
 
         pub const big_mhatt_out = Matrix(T) {
-            .capacity = big_mhatt_header.out_dim*big_mhatt_header.max_seq_len,
             .height = big_mhatt_header.max_seq_len,
             .width =  big_mhatt_header.out_dim,
             .ptr = &big_mhatt_out_cont,
@@ -89,7 +88,6 @@ pub fn mhattData(comptime T: type) type {
         var att_res_data: [7*4*4]T = undefined;
         var out_data: [5*7]T = undefined;
         pub var test_out_matrix = Matrix(T) {
-            .capacity = 5*7,
             .width = 5,
             .height = 7,
             .ptr = &out_data,
@@ -115,32 +113,29 @@ pub fn mhattData(comptime T: type) type {
         };
         pub var test_att1_cont6 = [_]T {2, 4, 6, 8};
 
-        pub const test_att1_header = test_mhatt_header.toAttentionHeader();
+        pub const att_header = test_mhatt_header.toAttentionHeader();
 
         const atten = Attention(T) {
-            .header = test_att1_header,
+            .header = att_header,
             .query_matrix = Matrix(T) {
-                .capacity = test_att1_header.att_dim*test_att1_header.seq_dim,
-                .height = test_att1_header.att_dim,
-                .width = test_att1_header.seq_dim,
+                .height = att_header.att_dim,
+                .width = att_header.seq_dim,
                 .ptr = &test_att1_cont1,
             },
 
             .query_vect = &test_att1_cont2,
 
             .key_matrix = Matrix(T) {
-                .capacity = test_att1_header.att_dim*test_att1_header.ctx_dim,
-                .height = test_att1_header.att_dim,
-                .width = test_att1_header.ctx_dim,
+                .height = att_header.att_dim,
+                .width = att_header.ctx_dim,
                 .ptr = &test_att1_cont3,
             },
 
             .key_vect = &test_att1_cont4,
 
             .value_matrix = Matrix(T) {
-                .capacity = test_att1_header.out_dim*test_att1_header.ctx_dim,
-                .height = test_att1_header.out_dim,
-                .width = test_att1_header.ctx_dim,
+                .height = att_header.out_dim,
+                .width = att_header.ctx_dim,
                 .ptr = &test_att1_cont5,
             },
 
@@ -161,13 +156,11 @@ pub fn mhattData(comptime T: type) type {
 
             .attentions = &attentions,
             .att_results = Matrix(T) {
-                .capacity = 7*4*4,
                 .height = 7*4,
                 .width = 4,
                 .ptr = &att_res_data,
             },
             .comb_matrix = Matrix(T) {
-                .capacity = 5*4*4,
                 .height = 5*4,
                 .width = 4,
                 .ptr = &test_comb_mat_data,
@@ -175,7 +168,6 @@ pub fn mhattData(comptime T: type) type {
             .comb_vect = &com_vec_data,
 
             .out = Matrix(T){
-                .capacity = out_data.len,
                 .height = 7,
                 .width = 5,
                 .ptr = &out_data,
@@ -186,13 +178,11 @@ pub fn mhattData(comptime T: type) type {
         var ctx_data = [_]T { 0.1, 0.3, 0.2, 0.4, 0.3, 0.4, 0.0, -0.1 };
 
         pub const test_seq = Matrix(T) {
-            .capacity = 4,
             .height = 4,
             .width = 1,
             .ptr = &seq_data,
         };
         pub const test_ctx = Matrix(T) {
-            .capacity = 8,
             .height = 4,
             .width = 2,
             .ptr = &ctx_data,
@@ -208,7 +198,6 @@ pub fn mhattData(comptime T: type) type {
         pub fn prepareTest() void {
             for (&attentions, &mid_data) |*a, *d| {
                 a.out.ptr = d;
-                a.out.capacity = 28;
             }
         }
     };
@@ -238,7 +227,8 @@ pub fn encoderData(comptime T: type) type {
             .max_ctx_len = 10,
         };
 
-        var ctx_data = [10]T {
+        const ctx_len = 5;
+        var ctx_data = [test_el_header.ctx_dim * ctx_len]T {
             2, 3,
             1, 7,
             2, 1,
@@ -247,22 +237,21 @@ pub fn encoderData(comptime T: type) type {
         };
 
         pub const ctx = Matrix(T) {
-            .capacity = 10,
-            .width = 2,
-            .height = 5,
+            .width = test_el_header.ctx_dim,
+            .height = ctx_len,
             .ptr = &ctx_data,
         };
 
         pub const mhatt_header = test_el_header.toMHAttentionHeader();
 
         pub const head1 = struct {
-            var qmat_data = [_]T {
+            var qmat_data = [mhatt_header.ctx_dim * mhatt_header.att_dim]T {
                 0.1, -0.2,
                 -0.3, 0.2,
                 0.2, -0.1,
             };
 
-            var qvec_data = [_]T {0.0, 0.1, 0.2};
+            var qvec_data = [mhatt_header.att_dim]T {0.0, 0.1, 0.2};
 
             var kmat_data = [_]T {
                 0.1, 0.2,
@@ -275,9 +264,11 @@ pub fn encoderData(comptime T: type) type {
             var vmat_data = [_]T {
                 0.5, -0.5,
                 -0.3, -0.2,
+                0.5, -0.5,
+                -0.3, -0.2,
             };
 
-            var vvec_data = [_]T {0.1, 0.0};
+            var vvec_data = [_]T {0.1, 0.0, 0.2, -0.01};
 
             var query: [30]T = undefined;
             var key: [30]T = undefined;
@@ -287,52 +278,44 @@ pub fn encoderData(comptime T: type) type {
             pub const att = Attention(T) {
                 .header = mhatt_header.toAttentionHeader(),
                 .query_matrix = Matrix(T) {
-                    .capacity = 6,
                     .width = 2,
                     .height = 3,
                     .ptr = &qmat_data,
                 },
                 .query_vect = &qvec_data,
                 .key_matrix = Matrix(T) {
-                    .capacity = 6,
                     .width = 2,
                     .height = 3,
                     .ptr = &kmat_data,
                 },
                 .key_vect = &kvec_data,
                 .value_matrix = Matrix(T) {
-                    .capacity = 4,
                     .width = 2,
-                    .height = 2,
+                    .height = 4,
                     .ptr = &vmat_data,
                 },
                 .value_vect = &vvec_data,
                 .key = Matrix(T) {
-                    .capacity = 30,
                     .width = 3,
                     .height = 10,
                     .ptr = &key,
                 },
                 .query = Matrix(T) {
-                    .capacity = 30,
                     .width = 3,
                     .height = 10,
                     .ptr = &query,
                 },
                 .value = Matrix(T) {
-                    .capacity = 20,
                     .width = 2,
                     .height = 10,
                     .ptr = &value
                 },
                 .score = Matrix(T) {
-                    .capacity = 100,
                     .width = 10,
                     .height = 10,
                     .ptr = &score,
                 },
                 .out = Matrix(T) {
-                    .capacity = 20,
                     .width = 2,
                     .height = 10,
                     .ptr = undefined,
@@ -347,36 +330,6 @@ pub fn encoderData(comptime T: type) type {
                 0.4014339047, -1.180414241, 
             };
 
-            // // for deeper testing
-            //
-            // pub const expected_query = [15]T {
-            //     -0.4,  0.1,  0.3,
-            //     -1.3,  1.2, -0.3,
-            //      0,   -0.3,  0.5,
-            //      0.4, -1.1,  1 , 
-            //      0.1, -0.6,  0.7, 
-            // };
-            //
-            // pub const expected_key = [15]T {
-            //     0.5, -1.1, -5.551115123e-17,
-            //     1.2, -1.6, -1.000000000e0,
-            //     0.1, -0.7,  4.000000000e-1,
-            //     0.1, -1.1,  1.000000000e0,
-            //     0.2, -1,    6.000000000e-1,
-            // };
-            //
-            // pub const expected_value = [10]T {
-            //     -0.4, -2.9,  0.6,  2.1,  1.1, 
-            //     -1.2, -1.7, -0.8, -1.2, -1.1, 
-            // };
-            //
-            // pub const expected_score = [25]T {
-            //     0.1852475402, 0.1287615593,  0.2228380049, 0.2415977396, 0.2215551559,
-            //     0.1816634986, 0.09033836584, 0.3019387867, 0.2062673465, 0.2197920024,
-            //     0.1863010496, 0.1522145924,  0.1951077428, 0.2486482,    0.2177284152,
-            //     0.1766863961, 0.160168573,   0.1574182591, 0.2869622327, 0.2187645391,
-            //     0.1818104975, 0.1502708502,  0.1818104975, 0.2661383004, 0.2199698543,
-            // };
         };
 
         pub const head2 = struct {
@@ -399,30 +352,29 @@ pub fn encoderData(comptime T: type) type {
             var vmat_data = [_]T {
                 0.53, -0.15,
                 -0.32, 0.22,
+                0.53, -0.15,
+                -0.32, 0.22,
             };
 
-            var vvec_data = [_]T {0.2, -0.01};
+            var vvec_data = [_]T {0.2, -0.01, 0.2, -0.01};
 
             pub const att = Attention(T) {
                 .header = mhatt_header.toAttentionHeader(),
                 .query_matrix = Matrix(T) {
-                    .capacity = 6,
                     .width = 2,
                     .height = 3,
                     .ptr = &qmat_data,
                 },
                 .query_vect = &qvec_data,
                 .key_matrix = Matrix(T) {
-                    .capacity = 6,
                     .width = 2,
                     .height = 3,
                     .ptr = &kmat_data,
                 },
                 .key_vect = &kvec_data,
                 .value_matrix = Matrix(T) {
-                    .capacity = 4,
                     .width = 2,
-                    .height = 2,
+                    .height = 4,
                     .ptr = &vmat_data,
                 },
                 .value_vect = &vvec_data,
@@ -443,12 +395,12 @@ pub fn encoderData(comptime T: type) type {
             };
         };
 
-        var comb_mat = [8]T {
-            0.2, 0.1,
-            -0.2, -0.1,
+        var comb_mat = [16]T {
+            0.2, 0.1, 0.3, 0.1,
+            -0.2, -0.1, -0.2, -0.1,
 
-            -0.2, 0.1,
-            0.2, -0.1,
+            -0.2, 0.1, 0.9, 0.5,
+            0.2, -0.1, 0.1, -0.1,
         };
         var comb_vect = [2]T {-0.1, 0.2};
         var out: [20]T = undefined;
@@ -460,14 +412,12 @@ pub fn encoderData(comptime T: type) type {
             .attentions = &attentions,
             .att_results = undefined,
             .comb_matrix = Matrix(T) {
-                .capacity = 8,
-                .width = 2,
-                .height = 4,
+                .width = mhatt_header.mid_dim,
+                .height = mhatt_header.heads * mhatt_header.out_dim,
                 .ptr = &comb_mat,
             },
             .comb_vect = &comb_vect,
             .out = Matrix(T) {
-                .capacity = 20,
                 .height = 10,
                 .width = 2,
                 .ptr = undefined,
@@ -515,13 +465,11 @@ pub fn encoderData(comptime T: type) type {
             .preceptron = MLP(T) {
                 .header = test_el_header.toMLPHeader(),
                 .mat1 = Matrix(T) {
-                    .capacity = 10,
                     .height = 5,
                     .width = 2,
                     .ptr = &mlp_mat1,
                 },
                 .mat2 = Matrix(T) {
-                    .capacity = 10,
                     .height = 2,
                     .width = 5,
                     .ptr = &mlp_mat2,
@@ -538,13 +486,4 @@ pub fn encoderData(comptime T: type) type {
         };
 
     };
-}
-
-pub fn compare_delta(comptime T: type, expected: []const T, actual: []const T, delta: T) !void {
-    if (expected.len != actual.len) {
-        return error.IncompatibleObjects;
-    }
-    for (expected, actual) |e, a| {
-        try std.testing.expectApproxEqRel(e, a, delta);
-    }
 }

@@ -9,8 +9,7 @@ const AlgebraicError = error {
 /// pointer but there are no checks for double freeing!
 pub fn Matrix(comptime T: type) type {
     return struct {
-        ptr: ?[*]T,
-        capacity: usize,
+        ptr: []T,
         height: usize,
         width: usize,
 
@@ -25,18 +24,37 @@ pub fn Matrix(comptime T: type) type {
             return retval;
         }
 
+        pub fn copy(self: Self, allocator: std.mem.Allocator) !Self {
+            var retval = self;
+            const ptr = try allocator.alloc(T, self.height*self.width);
+            retval.ptr = ptr;
+            std.mem.copyBackwards(T, retval.ptr, self.toSlice());
+            return retval;
+        }
+
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (self.height != expected.height) {
+                std.debug.print("Inequal height\n", .{});
+                return false;
+            }
+            if (self.width != expected.width) {
+                std.debug.print("Inequal width\n", .{});
+                return false;
+            }
+
+            return compareVectorDelta(T, expected.toSlice(), self.toSlice(), delta);
+        }
+
         /// sets height and width to zero. The idea is that we can have an arbitrary
         /// data length and calculus should be coherent
         pub fn allocate(self: *Self, allocator: std.mem.Allocator, capacity: usize) !void {
             self.height = 0;
             self.width = 0;
-            self.ptr = (try allocator.alloc(T, capacity)).ptr;
-            self.capacity = capacity;
+            self.ptr = try allocator.alloc(T, capacity);
         }
 
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.ptr.?[0..self.capacity]);
-            self.capacity = 0;
+            allocator.free(self.ptr);
             self.height = 0;
             self.width = 0;
         }
@@ -47,17 +65,17 @@ pub fn Matrix(comptime T: type) type {
             if (i > self.height or j > self.width) {
                 return null;
             }
-            return self.ptr.?[i*self.width+j];
+            return self.ptr[i*self.width+j];
         }
 
         pub inline fn row(self: Self, i: usize) []T {
             const start = i*self.width;
-            return self.ptr.?[start..start+self.width];
+            return self.ptr[start..start+self.width];
         }
 
         /// returns the slice of size of matrix, not its capacity
         pub inline fn toSlice(self: Self) []T {
-            return self.ptr.?[0..self.height*self.width];
+            return self.ptr[0..self.height*self.width];
         }
 
         // 
@@ -68,10 +86,9 @@ pub fn Matrix(comptime T: type) type {
             }
 
             return Matrix(T){
-                .capacity = self.width*(end - start),
                 .height = end - start,
                 .width = self.width,
-                .ptr = self.ptr.? + self.width*start,
+                .ptr = self.ptr[self.width*start..],
             };
         }
 
@@ -85,19 +102,19 @@ pub fn Matrix(comptime T: type) type {
         }
 
         pub fn write(self: Self, writer: anytype) !void {
-            if (self.height*self.width > self.capacity) {
+            if (self.height*self.width > self.ptr.len) {
                 return error.OutOfBound;
             }
-            const ptr: [*]u8 = @ptrCast(self.ptr);
+            const ptr: [*]u8 = @ptrCast(self.ptr.ptr);
             const size: usize = self.height*self.width*@sizeOf(T);
             _ = try writer.write(ptr[0..size]);
         }
 
         pub fn read(self: Self, reader: anytype) !void {
-            if (self.height*self.width > self.capacity) {
+            if (self.height*self.width > self.ptr.len) {
                 return error.OutOfBound;
             }
-            const ptr: [*]u8 =  @ptrCast(self.ptr);
+            const ptr: [*]u8 =  @ptrCast(self.ptr.ptr);
             const size: usize = self.height*self.width*@sizeOf(T);
             const buffer: []u8 = ptr[0..size];
             _ = try reader.read(buffer);
@@ -132,7 +149,7 @@ pub fn Matrix(comptime T: type) type {
             // dumb implementation
             for (0..self.height) |i| {
                 for (0..self.width) |j| {
-                    self.ptr.?[i*self.width+j] += vec[j];
+                    self.ptr[i*self.width+j] += vec[j];
                 }
             }
         }
@@ -146,10 +163,9 @@ pub fn Matrix(comptime T: type) type {
             }
 
             // dumb implementation
-            const ptr = self.ptr.?;
             for (0..self.height) |i| {
                 for (0..self.width) |j| {
-                    ptr[i*self.width+j] += vec[i];
+                    self.ptr[i*self.width+j] += vec[i];
                 }
             }
         }
@@ -160,32 +176,36 @@ pub fn Matrix(comptime T: type) type {
             }
         }
 
+        const empty_arr = &[0]T{};
         pub const empty = Matrix(T) {
-            .capacity = 0,
             .height = 0,
             .width = 0,
-            .ptr = null,
+            .ptr = empty_arr,
         };
 
         pub fn fromSlice(slice: []T, height: u32, width: u32) Self {
             return Matrix(T) {
-                .capacity = slice.len,
                 .height = height,
                 .width = width,
-                .ptr = slice.ptr,
+                .ptr = slice[0..@min(slice.len, height*width)],
             };
         }
 
+
 // ---------------------------- TESTS --------------------------------------
+
         test init {
             var mat = try Matrix(T).init(std.testing.allocator, 10, 10);
             mat.destroy(std.testing.allocator);
         }
 
         test allocate {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
             var mat: Matrix(T) = undefined;
-            try mat.allocate(std.testing.allocator, 10);
-            mat.destroy(std.testing.allocator);
+            try mat.allocate(allocator, 10);
         }
 
         test at {
@@ -194,7 +214,6 @@ pub fn Matrix(comptime T: type) type {
                 4, 5, 6,
             };
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -208,7 +227,6 @@ pub fn Matrix(comptime T: type) type {
                 4, 5, 6
             };
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -226,7 +244,6 @@ pub fn Matrix(comptime T: type) type {
                 5, 6
             };
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 3,
                 .width = 2,
                 .ptr = &content,
@@ -240,18 +257,20 @@ pub fn Matrix(comptime T: type) type {
         }
 
         test fillRandom {
-            var mat = try Matrix(T).init(std.testing.allocator, 3, 3);
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
+            var mat = try Matrix(T).init(allocator, 3, 3);
             var xoshiro = std.Random.Xoshiro256.init(123);
             const rand = xoshiro.random();
 
             mat.fillRandom(rand, 1);
-            mat.destroy(std.testing.allocator);
         }
 
         test write {
             var content = [6]T {1, 2, 3, 4, 5, 6};
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -270,7 +289,6 @@ pub fn Matrix(comptime T: type) type {
         test read {
             var content = [6]T {0, 0, 0, 0, 0, 0};
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -288,7 +306,6 @@ pub fn Matrix(comptime T: type) type {
         test scale {
             var content = [6]T {1, 2, 3, 4, 5, 6};
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -307,7 +324,6 @@ pub fn Matrix(comptime T: type) type {
             };
             var forme = [3]T {1, 2, 3};
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -327,7 +343,6 @@ pub fn Matrix(comptime T: type) type {
             };
             var vect = [2]T {1, 2};
             const mat = Matrix(T) {
-                .capacity = 6,
                 .height = 2,
                 .width = 3,
                 .ptr = &content,
@@ -356,7 +371,7 @@ pub fn matprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: *Matrix(
         return error.IncompatibleObjects; 
     }
 
-    if (out.capacity < mat1.height*mat2.height) {
+    if (out.ptr.len < mat1.height*mat2.height) {
         std.log.err("Can't store the output\n", .{});
         return error.OutOfBound; 
     }
@@ -394,7 +409,7 @@ pub fn mataddprod(comptime T: type, mat1: Matrix(T), mat2: Matrix(T), out: *Matr
         return error.IncompatibleObjects; 
     }
 
-    if (out.capacity < mat1.height*mat2.height) {
+    if (out.ptr.len < mat1.height*mat2.height) {
         std.log.err("Can't store the output\n", .{});
         return error.OutOfBound; 
     }
@@ -478,6 +493,18 @@ pub fn writeVector(comptime T: type, writer: anytype, vec: []T) !void {
     _ = try writer.write(ptr[0..size]);
 }
 
+pub fn compareVectorDelta(comptime T: type, expected: []const T, actual: []const T, delta: T) bool {
+    if (expected.len != actual.len) {
+        return false;
+    }
+    for (expected, actual) |e, a| {
+        if (@abs(e-a) > delta) {
+            return false;
+        }
+    }
+    return true;
+}
+
 test matprod {
     var cont1 = [_]f32 {
         1, 2, 3,
@@ -492,19 +519,16 @@ test matprod {
     var cont3: [8]f32 = undefined;
 
     const mat1 = Matrix(f32) {
-        .capacity = 6,
         .height = 2,
         .width = 3,
         .ptr = &cont1,
     };
     const mat2 = Matrix(f32) {
-        .capacity = 12,
         .height = 4,
         .width = 3,
         .ptr = &cont2,
     };
     var out = Matrix(f32) {
-        .capacity = 8,
         .height = 4,
         .width = 2,
         .ptr = &cont3,
@@ -533,19 +557,16 @@ test affine {
     var cont3: [8]f32 = undefined;
 
     const mat1 = Matrix(f32) {
-        .capacity = 6,
         .height = 2,
         .width = 3,
         .ptr = &cont1,
     };
     const mat2 = Matrix(f32) {
-        .capacity = 12,
         .height = 4,
         .width = 3,
         .ptr = &cont2,
     };
     var out = Matrix(f32) {
-        .capacity = 8,
         .height = 4,
         .width = 2,
         .ptr = &cont3,
@@ -574,19 +595,16 @@ test affine2 {
     var cont3: [8]f32 = undefined;
 
     const mat1 = Matrix(f32) {
-        .capacity = 6,
         .height = 2,
         .width = 3,
         .ptr = &cont1,
     };
     const mat2 = Matrix(f32) {
-        .capacity = 12,
         .height = 4,
         .width = 3,
         .ptr = &cont2,
     };
     var out = Matrix(f32) {
-        .capacity = 8,
         .height = 4,
         .width = 2,
         .ptr = &cont3,
@@ -608,7 +626,6 @@ test softmax {
         0, 0,
     };
     const mat = Matrix(f32) {
-        .capacity = 6,
         .height = 3,
         .width = 2,
         .ptr = &cont,
@@ -652,3 +669,4 @@ test writeVector {
     try writeVector(f32, writer, &content);
     try std.testing.expectEqual(buffer, content);
 }
+
