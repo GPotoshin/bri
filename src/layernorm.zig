@@ -26,6 +26,22 @@ pub fn LayerNorm(comptime T: type) type {
             return false;
         }
 
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            mtx.fillVecRandom(T, rand, self.gamma, k);
+            mtx.fillVecRandom(T, rand, self.beta, k);
+        }
+
+        pub fn copyValuesFrom(dest: *Self, source: Self) !void {
+            if (dest.gamma.len < source.gamma.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.gamma, source.gamma);
+            if (dest.beta.len < source.beta.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.beta, source.beta);
+        }
+
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
             allocator.free(self.gamma);
             self.gamma.len = 0;

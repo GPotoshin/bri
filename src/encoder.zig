@@ -134,6 +134,20 @@ pub fn EncodeLayer(comptime T: type) type {
             return retval;
         }
 
+        pub fn copyValuesFrom(dest: *Self, source: Self) !void {
+            try dest.mhattention.copyValuesFrom(source.mhattention);
+            try dest.layer_norm1.copyValuesFrom(source.layer_norm1);
+            try dest.preceptron.copyValuesFrom(source.preceptron);
+            try dest.layer_norm2.copyValuesFrom(source.layer_norm2);
+        }
+
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            self.mhattention.fillRandom(rand, k);
+            self.layer_norm1.fillRandom(rand, k);
+            self.preceptron.fillRandom(rand, k);
+            self.layer_norm2.fillRandom(rand, k);
+        }
+
         pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
             if (
                 std.meta.eql(self.header, expected.header) and
@@ -165,6 +179,7 @@ pub fn EncodeLayer(comptime T: type) type {
             self.mhattention.out = ctx;
             try self.mhattention.compute(ctx, ctx, .bidirectional);   
             self.layer_norm1.apply(ctx);
+            self.preceptron.out = ctx;
             try self.preceptron.compute(ctx); // outputs should be set to them selfs
             self.layer_norm2.apply(ctx);
         }
@@ -212,9 +227,37 @@ pub fn EncodeLayer(comptime T: type) type {
         }
 
         test compute {
-            var ctx = try testData.ctx.copy(std.testing.allocator);
-            defer ctx.destroy(std.testing.allocator);
-            try testData.encodeLayer.compute(testData.ctx);
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
+            var encodeLayer: EncodeLayer(T) = undefined;
+            encodeLayer.header = testData.test_el_header;
+            try encodeLayer.allocateForHeader(allocator);
+
+            try encodeLayer.copyValuesFrom(testData.encodeLayer);
+            const ctx = try testData.ctx.copy(allocator);
+            try encodeLayer.compute(ctx);
+        }
+
+        test copyValuesFrom {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
+            var encodeLayer: EncodeLayer(T) = undefined;
+            var encodeLayerCopy: EncodeLayer(T) = undefined;
+            encodeLayer.header = testData.test_el_header;
+            encodeLayerCopy.header = testData.test_el_header;
+
+            try encodeLayer.allocateForHeader(allocator);
+            try encodeLayerCopy.allocateForHeader(allocator);
+
+            var xoshiro = std.Random.Xoshiro256.init(123);
+            const rand = xoshiro.random();
+            encodeLayer.fillRandom(rand, 1);
+            try encodeLayerCopy.copyValuesFrom(encodeLayer);
+            try std.testing.expect(encodeLayerCopy.isEqualTo(encodeLayer, 0.000001));
         }
     };
 }

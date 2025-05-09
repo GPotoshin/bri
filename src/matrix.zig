@@ -32,6 +32,16 @@ pub fn Matrix(comptime T: type) type {
             return retval;
         }
 
+        /// Copies data to preallocatoed matrix from which it is called.
+        /// Returns an error if the underlying slice cannot hold all the data
+        pub fn copyValuesFrom(self: *Self, mat: Self) !void {
+            if (self.ptr.len < mat.height*mat.width) {
+                std.log.err("", .{});
+                return AlgebraicError.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, self.ptr, mat.toSlice());
+        }
+
         pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
             if (self.height != expected.height) {
                 std.debug.print("Inequal height\n", .{});

@@ -420,7 +420,7 @@ pub fn encoderData(comptime T: type) type {
             .out = Matrix(T) {
                 .height = 10,
                 .width = 2,
-                .ptr = undefined,
+                .ptr = &out,
             },
         };
 

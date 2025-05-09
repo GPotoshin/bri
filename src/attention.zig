@@ -149,6 +149,28 @@ pub fn Attention(comptime T: type) type {
             return false;
         }
 
+        pub fn copyValuesFrom(dest: *Self, source: Self) !void {
+            dest.header = source.header;
+
+            try dest.query_matrix.copyValuesFrom(source.query_matrix);
+            if (dest.query_vect.len < source.query_vect.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.query_vect, source.query_vect);
+
+            try dest.key_matrix.copyValuesFrom(source.key_matrix);
+            if (dest.key_vect.len < source.key_vect.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.key_vect, source.key_vect);
+
+            try dest.value_matrix.copyValuesFrom(source.value_matrix);
+            if (dest.value_vect.len < source.value_vect.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.value_vect, source.value_vect);
+        }
+
         /// allocates the memory for all weights with dimensions from it's header
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             const header = self.header;

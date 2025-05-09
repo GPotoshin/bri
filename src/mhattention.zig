@@ -193,6 +193,17 @@ pub fn MHAttention(comptime T: type) type {
             return retval;
         }
 
+        pub fn copyValuesFrom(dest: *Self, source: Self) !void {
+            for (dest.attentions, source.attentions) |*d, s| {
+                try d.copyValuesFrom(s);
+            }
+            try dest.comb_matrix.copyValuesFrom(source.comb_matrix);
+            if (dest.comb_vect.len < source.comb_vect.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.comb_vect, source.comb_vect);
+        }
+
         pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
             if (!(
                 std.meta.eql(expected.header, self.header) and
@@ -295,8 +306,7 @@ pub fn MHAttention(comptime T: type) type {
 
         // @AddThreads
         pub fn compute(self: *Self, ctx: Matrix(T), seq: Matrix(T), comptime mask: att.Mask) !void {
-
-            @memset(self.out.toSlice(), 0);
+            @memset(self.out.toSlice(), 0); // @CheckThat: Are you sure it's ok
             // Check that the out matrix is the right one
             // remove multiplication
             const transform_size = self.header.out_dim;
@@ -305,6 +315,7 @@ pub fn MHAttention(comptime T: type) type {
                 std.log.err("Input is too long!\n", .{});
                 return error.IncompatibleObjects;
             }
+
             for (self.attentions) |*a| {
                 try a.compute(ctx, seq, mask);
             }

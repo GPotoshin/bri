@@ -66,7 +66,7 @@ pub const MultilayerPreceptronHeader = struct {
     }
 };
 
-// @NotTested
+// @NotTested yet
 // only 2 layers for now
 pub fn MultilayerPreceptron(comptime T: type) type {
     return struct {
@@ -80,6 +80,27 @@ pub fn MultilayerPreceptron(comptime T: type) type {
         out: Matrix(T),
         
         const Self = @This();
+
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            self.mat1.fillRandom(rand, k);
+            mtx.fillVecRandom(T, rand, self.vec1, k);
+            self.mat2.fillRandom(rand, k);
+            mtx.fillVecRandom(T, rand, self.vec2, k);
+        }
+
+        pub fn copyValuesFrom(dest: *Self, source: Self) !void {
+            try dest.mat1.copyValuesFrom(source.mat1);
+            if (dest.vec1.len < source.vec1.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.vec1, source.vec1);
+
+            try dest.mat2.copyValuesFrom(source.mat2);
+            if (dest.vec2.len < source.vec2.len) {
+                return error.IncompatibleObjects;
+            }
+            std.mem.copyBackwards(T, dest.vec2, source.vec2);
+        }
 
         pub fn compute(self: *Self, input: Matrix(T)) !void {
             try mtx.matprod(T, self.mat1, input, &self.mid);
