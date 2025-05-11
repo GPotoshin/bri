@@ -138,6 +138,10 @@ pub fn MultilayerPreceptron(comptime T: type) type {
             self.vec2 = try allocator.alloc(T, self.header.out_dim);
         }
 
+        pub fn allocateOut(self: *Self, allocator: std.mem.Allocator) !void {
+            self.out = try Matrix(T).init(allocator, self.header.max_seq_len, self.header.out_dim);
+        }
+
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
             allocator.free(self.vec1);
             self.mid.destroy(allocator);

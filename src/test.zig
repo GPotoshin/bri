@@ -322,7 +322,9 @@ pub fn encoderData(comptime T: type) type {
                 },
             };
 
-            pub var expected_out = [10]T {
+            
+            // it is not the right output data
+            var expected_out_data = [10]T {
                 0.4372611895, -1.153090062, 
                 0.521449242,  -1.102414468, 
                 0.3627843846, -1.176291358, 
@@ -330,6 +332,11 @@ pub fn encoderData(comptime T: type) type {
                 0.4014339047, -1.180414241, 
             };
 
+            pub const expected_out = Matrix(T) {
+                .height = 5,
+                .width = 4,
+                .ptr = &expected_out_data,
+            };
         };
 
         pub const head2 = struct {
@@ -420,7 +427,7 @@ pub fn encoderData(comptime T: type) type {
             .out = Matrix(T) {
                 .height = 10,
                 .width = 2,
-                .ptr = &out,
+                .ptr = undefined,
             },
         };
 

@@ -189,6 +189,11 @@ pub fn Attention(comptime T: type) type {
             self.value = try Matrix(T).init(allocator, header.out_dim, header.max_ctx_len);
         }
 
+        pub fn allocateOut(self: *Self, allocator: std.mem.Allocator) !void {
+            const header = self.header;
+            self.out = try Matrix(T).init(allocator, header.max_seq_len, header.out_dim);
+        }
+
         pub fn checkWeightDimensions(self: Self) !void {
             if (self.query_matrix.width != self.header.seq_dim) {
                 std.debug.print("Width of query matrix differs from the sequence dimension in attention header\n", .{});

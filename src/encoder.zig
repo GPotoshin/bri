@@ -3,7 +3,9 @@ const mhatt = @import("mhattention.zig");
 const ln = @import("layernorm.zig");
 const mlp = @import("multilayerpreceptron.zig");
 const mtx = @import("matrix.zig");
+const att = @import("attention.zig");
 
+const Attention = att.Attention;
 const Matrix = mtx.Matrix;
 const MHAttention = mhatt.MHAttention;
 const LayerNorm = ln.LayerNorm;
@@ -175,7 +177,7 @@ pub fn EncodeLayer(comptime T: type) type {
             self.layer_norm2.destroy(allocator);
         }
 
-        pub fn compute(self: *Self, ctx: Matrix(T)) !void {
+        pub fn apply(self: *Self, ctx: Matrix(T)) !void {
             self.mhattention.out = ctx;
             try self.mhattention.compute(ctx, ctx, .bidirectional);   
             self.layer_norm1.apply(ctx);
@@ -226,18 +228,45 @@ pub fn EncodeLayer(comptime T: type) type {
             try std.testing.expect(enc_layer.isEqualTo(testData.encodeLayer, 0.000001));
         }
 
-        test compute {
+        // Todo: test computed value
+        test apply {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const allocator = arena.allocator();
 
+            // separated pipeline
+            var mhattention: MHAttention(T) = undefined;
+            mhattention.header = testData.mhatt_header;
+            try mhattention.allocateForHeader(allocator);
+            try mhattention.allocateOut(allocator);
+            try mhattention.compute(testData.ctx, testData.ctx, .bidirectional);
+
+            var ln1 = try LayerNorm(T).init(allocator, testData.test_el_header.ctx_dim);
+            try ln1.copyValuesFrom(testData.encodeLayer.layer_norm1);
+            ln1.apply(mhattention.out);
+
+            var pr: MultilayerPreceptron(T) = undefined;
+            pr.header = testData.test_el_header.toMLPHeader();
+            try pr.allocateFromHeader(allocator);
+            try pr.allocateOut(allocator);
+            try pr.compute(mhattention.out); // outputs should be set to them selfs
+
+
+            var ln2 = try LayerNorm(T).init(allocator, testData.test_el_header.ctx_dim);
+            try ln2.copyValuesFrom(testData.encodeLayer.layer_norm2);
+            ln2.apply(pr.out);
+
+            const ctx = try testData.ctx.copy(allocator);
+
+            // the actual pipeline
             var encodeLayer: EncodeLayer(T) = undefined;
             encodeLayer.header = testData.test_el_header;
             try encodeLayer.allocateForHeader(allocator);
-
             try encodeLayer.copyValuesFrom(testData.encodeLayer);
-            const ctx = try testData.ctx.copy(allocator);
-            try encodeLayer.compute(ctx);
+            try encodeLayer.apply(ctx);
+
+            // if every step is coorect then their composition also
+            try std.testing.expect(ctx.isEqualTo(pr.out, 0.001));
         }
 
         test copyValuesFrom {
@@ -266,14 +295,190 @@ comptime {
     _ = EncodeLayer(f64);
 }
 
+pub const EncoderHeader = struct {
+    version: u32,
+    type_len: u32,
+    layers: u32,
+    heads: u32,
+    ctx_dim: u32,
+    att_dim: u32,
+    mid_dim: u32,
+    mlp_dim: u32,
+    max_ctx_len: u32,
+
+    const Self = @This();
+    pub fn write(self: Self, writer: anytype) !void {
+        writer.writeInt(u32, self.version, .little) catch |e| {
+            std.log.err("can't write version\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.type_len, .little) catch |e| {
+            std.log.err("can't write type_size\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.layers, .little) catch |e| {
+            std.log.err("can't write layers\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.heads, .little) catch |e| {
+            std.log.err("can't write heads\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.ctx_dim, .little) catch |e| {
+            std.log.err("can't write ctx_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.att_dim, .little) catch |e| {
+            std.log.err("can't write att_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.mid_dim, .little) catch |e| {
+            std.log.err("can't write mid_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.mlp_dim, .little) catch |e| {
+            std.log.err("can't write mid_dim\n", .{});
+            return e;
+        };
+        writer.writeInt(u32, self.max_ctx_len, .little) catch |e| {
+            std.log.err("can't write seq_dim\n", .{});
+            return e;
+        };
+    }
+    pub fn read(self: *Self, reader: anytype) !void {
+        self.version = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read version\n", .{});
+            return e;
+        };
+        self.type_len = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read type_size\n", .{});
+            return e;
+        };
+        self.layers = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read layers\n", .{});
+            return e;
+        };
+        self.heads = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read heads\n", .{});
+            return e;
+        };
+        self.ctx_dim = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read ctx_dim\n", .{});
+            return e;
+        };
+        self.att_dim = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read att_dim\n", .{});
+            return e;
+        };
+        self.mid_dim = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read mid_dim\n", .{});
+            return e;
+        };
+        self.mlp_dim = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read mid_dim\n", .{});
+            return e;
+        };
+        self.max_ctx_len = reader.readInt(u32, .little) catch |e| {
+            std.log.err("can't read seq_dim\n", .{});
+            return e;
+        };
+    }
+
+    pub fn toELHeader(self: *Self) EncodeLayerHeader {
+        return .{
+            .version = self.version,
+            .type_len = self.type_len,
+            .layers = self.layers,
+            .heads = self.heads,
+            .ctx_dim = self.ctx_dim,
+            .att_dim = self.att_dim,
+            .mid_dim = self.mid_dim,
+            .mlp_dim = self.mlp_dim,
+            .max_ctx_len = self.max_ctx_len,
+        };
+    }
+};
+
 pub fn Encoder(comptime T: type) type {
     return struct {
-        layers: []EncodeLayer(T),
+        header: EncoderHeader,
+        layers: ?[]EncodeLayer(T),
 
         const Self = @This();
-        pub fn compute(self: Self, seq: Matrix(T)) !void {
+
+        pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
+            self.layers = try allocator.alloc(EncodeLayer(T), self.header.layers);
+            for (self.layers) |*layer| {
+                layer.header = self.header.toELHeader();
+                layer.allocateForHeader();
+            }
+        }
+
+        pub fn apply(self: Self, seq: Matrix(T)) !void {
             for (self.layers) |layer| {
-                layer.compute(seq);
+                layer.apply(seq);
+            }
+        }
+
+        pub fn init(allocator: std.mem.Allocator, header: EncoderHeader) !Self {
+            var retval: Self = undefined;
+            retval.header = header;
+            try retval.allocateForHeader(allocator);
+            return retval;
+        }
+
+        pub fn copyValuesFrom(dest: *Self, source: Self) !void {
+            if (std.meta.eql(dest.header, source.header)) { // attention! not all fields should be equal
+                return error.IncompatibleObjects;
+            }
+            for (dest.layers, source.layers) |dlayer, slayer| {
+                dlayer.copyValuesFrom(slayer);
+            }
+        }
+
+        pub fn fillRandom(self: Self, rand: std.Random, k: T) void {
+            for (self.layers) |layer| {
+                layer.fillRandom(rand, k);
+            }
+        }
+
+        pub fn isEqualTo(self: Self, expected: Self, delta: T) bool {
+            if (std.meta.eql(self.header, expected.header) and self.layers.len == expected.layers.len) {
+                for (self.layers, expected.layers) |slayer, elayer| {
+                    if (!slayer.isEqualTo(elayer, delta)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+            for (self.layers) |layer| {
+                layer.destroy(allocator);
+            }
+            allocator.free(self.layers);
+            self.layers = null;
+        }
+        
+        pub fn writeWeights(self: Self, writer: anytype) !void {
+            if (self.layers.len != self.header.layers) {
+                return error.IncompatibleObjects;
+            }
+
+            for (self.layers) |layer| {
+                try layer.read.writeWeights(writer);
+            }
+        }
+
+        pub fn readWeights(self: *Self, reader: anytype) !void {
+            if (self.layers.len != self.header.layers) {
+                return error.IncompatibleObjects;
+            }
+
+            for (self.layers) |layer| {
+                try layer.read.readWeights(reader);
             }
         }
     };

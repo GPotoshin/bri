@@ -137,6 +137,7 @@ pub fn Matrix(comptime T: type) type {
                 }
                 std.debug.print("\n", .{});
             }
+                std.debug.print("height: {}, width: {}, ptr: {*}, len: {}\n", .{mat.height, mat.width, mat.ptr.ptr, mat.ptr.len});
         }
 
         pub fn scale(self: Self, k: T) void {

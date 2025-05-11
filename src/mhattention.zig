@@ -241,6 +241,10 @@ pub fn MHAttention(comptime T: type) type {
             self.comb_vect = try allocator.alloc(T, self.header.out_dim);
         }
 
+        pub fn allocateOut(self: *Self, allocator: std.mem.Allocator) !void {
+            self.out = try Matrix(T).init(allocator, self.header.out_dim, self.header.max_seq_len);
+        }
+
         pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
             for (self.attentions) |*a| {
                 a.destroy(allocator);
@@ -306,7 +310,6 @@ pub fn MHAttention(comptime T: type) type {
 
         // @AddThreads
         pub fn compute(self: *Self, ctx: Matrix(T), seq: Matrix(T), comptime mask: att.Mask) !void {
-            @memset(self.out.toSlice(), 0); // @CheckThat: Are you sure it's ok
             // Check that the out matrix is the right one
             // remove multiplication
             const transform_size = self.header.out_dim;
@@ -321,6 +324,7 @@ pub fn MHAttention(comptime T: type) type {
             }
             
             // this way we can pass seq to the out @TestIt
+            @memset(self.out.toSlice(), 0); // @CheckThat: Are you sure it's ok
             for (0..self.attentions.len) |i| {
                 const start_transform: u32 = @truncate(transform_size*i);
                 const end_transform: u32 = @truncate(transform_size*(i+1));
