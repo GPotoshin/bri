@@ -39,7 +39,7 @@ pub fn Tokenizer() type {
 
             const endPos = try file.getEndPos();
             if (endPos == 0) {
-                std.debug.print("empty file...\n", .{});
+                std.debug.print("empty token file...\n", .{});
                 return .{
                     .tokens = std.ArrayList([]u8).init(allocator),
                     .ids = ids,
@@ -339,7 +339,7 @@ pub fn Tokenizer() type {
             try file.seekTo(0);
 
             const writer = file.writer();
-            self.write(writer);
+            try self.write(writer);
 
             try file.setEndPos(try file.getPos());
         }

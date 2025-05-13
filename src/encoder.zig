@@ -165,8 +165,10 @@ pub fn EncodeLayer(comptime T: type) type {
 
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.mhattention = try MHAttention(T).init(allocator, self.header.toMHAttentionHeader(), Matrix(T).empty);
+            try self.mhattention.allocateOut(allocator);
             self.layer_norm1 = try LayerNorm(T).init(allocator, self.header.ctx_dim);
             self.preceptron = try MultilayerPreceptron(T).init(allocator, self.header.toMLPHeader());
+            try self.preceptron.allocateOut(allocator);
             self.layer_norm2 = try LayerNorm(T).init(allocator, self.header.ctx_dim);
         }
 
@@ -178,11 +180,11 @@ pub fn EncodeLayer(comptime T: type) type {
         }
 
         pub fn apply(self: *Self, ctx: Matrix(T)) !void {
-            self.mhattention.out = ctx;
             try self.mhattention.compute(ctx, ctx, .bidirectional);   
+            try ctx.add(self.mhattention.out);
             self.layer_norm1.apply(ctx);
-            self.preceptron.out = ctx;
             try self.preceptron.compute(ctx); // outputs should be set to them selfs
+            try ctx.add(self.preceptron.out);
             self.layer_norm2.apply(ctx);
         }
 
@@ -229,44 +231,47 @@ pub fn EncodeLayer(comptime T: type) type {
         }
 
         // Todo: test computed value
+        // Actually this test can be removed, but I may still want to use it one day
         test apply {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const allocator = arena.allocator();
 
             // separated pipeline
+            const ctx = try testData.ctx.copy(allocator);
+
             var mhattention: MHAttention(T) = undefined;
             mhattention.header = testData.mhatt_header;
             try mhattention.allocateForHeader(allocator);
             try mhattention.allocateOut(allocator);
-            try mhattention.compute(testData.ctx, testData.ctx, .bidirectional);
+            try mhattention.compute(ctx, ctx, .bidirectional);
+            try ctx.add(mhattention.out);
 
             var ln1 = try LayerNorm(T).init(allocator, testData.test_el_header.ctx_dim);
             try ln1.copyValuesFrom(testData.encodeLayer.layer_norm1);
-            ln1.apply(mhattention.out);
+            ln1.apply(ctx);
 
             var pr: MultilayerPreceptron(T) = undefined;
             pr.header = testData.test_el_header.toMLPHeader();
             try pr.allocateFromHeader(allocator);
             try pr.allocateOut(allocator);
-            try pr.compute(mhattention.out); // outputs should be set to them selfs
-
+            try pr.compute(ctx); // outputs should be set to them selfs
+            try ctx.add(pr.out);
 
             var ln2 = try LayerNorm(T).init(allocator, testData.test_el_header.ctx_dim);
             try ln2.copyValuesFrom(testData.encodeLayer.layer_norm2);
-            ln2.apply(pr.out);
-
-            const ctx = try testData.ctx.copy(allocator);
+            ln2.apply(ctx);
 
             // the actual pipeline
+            const ctx2 = try testData.ctx.copy(allocator);
             var encodeLayer: EncodeLayer(T) = undefined;
             encodeLayer.header = testData.test_el_header;
             try encodeLayer.allocateForHeader(allocator);
             try encodeLayer.copyValuesFrom(testData.encodeLayer);
-            try encodeLayer.apply(ctx);
+            try encodeLayer.apply(ctx2);
 
             // if every step is coorect then their composition also
-            try std.testing.expect(ctx.isEqualTo(pr.out, 0.001));
+            try std.testing.expect(ctx2.isEqualTo(ctx, 0.001));
         }
 
         test copyValuesFrom {
@@ -414,9 +419,9 @@ pub fn Encoder(comptime T: type) type {
             }
         }
 
-        pub fn apply(self: Self, seq: Matrix(T)) !void {
+        pub fn apply(self: Self, ctx: Matrix(T)) !void {
             for (self.layers) |layer| {
-                layer.apply(seq);
+                layer.apply(ctx);
             }
         }
 

@@ -137,7 +137,7 @@ pub fn Matrix(comptime T: type) type {
                 }
                 std.debug.print("\n", .{});
             }
-                std.debug.print("height: {}, width: {}, ptr: {*}, len: {}\n", .{mat.height, mat.width, mat.ptr.ptr, mat.ptr.len});
+            std.debug.print("height: {}, width: {}, ptr: {*}, len: {}\n", .{mat.height, mat.width, mat.ptr.ptr, mat.ptr.len});
         }
 
         pub fn scale(self: Self, k: T) void {
@@ -146,6 +146,18 @@ pub fn Matrix(comptime T: type) type {
                 for(vec) |*v| {
                     v.* *= k;
                 }
+            }
+        }
+
+        pub fn add(self: Self, mat: Self) !void {
+            if (self.height != mat.height or self.width != mat.width or
+                self.ptr.len < self.height*self.width or
+                mat.ptr.len < mat.height*mat.width) {
+                return error.IncompatibleObjects;
+            }
+
+            for (self.toSlice(), mat.toSlice()) |*s, m| {
+                s.* += m;
             }
         }
 
@@ -322,6 +334,20 @@ pub fn Matrix(comptime T: type) type {
                 .ptr = &content,
             };
             mat.scale(2);
+            try std.testing.expectEqualSlices(T, &[_]T {
+                2, 4, 6,
+                8, 10, 12,
+            }, mat.toSlice());
+        }
+
+        test add {
+            var content = [6]T {1, 2, 3, 4, 5, 6};
+            const mat = Matrix(T) {
+                .height = 2,
+                .width = 3,
+                .ptr = &content,
+            };
+            try mat.add(mat);
             try std.testing.expectEqualSlices(T, &[_]T {
                 2, 4, 6,
                 8, 10, 12,
