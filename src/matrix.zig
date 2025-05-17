@@ -80,6 +80,7 @@ pub fn Matrix(comptime T: type) type {
 
         pub inline fn row(self: Self, i: usize) []T {
             const start = i*self.width;
+            std.debug.print("start: {}\n", .{start});
             return self.ptr[start..start+self.width];
         }
 
@@ -89,7 +90,7 @@ pub fn Matrix(comptime T: type) type {
         }
 
         // 
-        pub inline fn submatrix(self: Self, start: u32, end: u32) ?Self {
+        pub inline fn submatrix(self: Self, start: usize, end: usize) ?Self {
             if (start < 0 or start >= end or end > self.height) {
                 std.log.err("wrong indices for sub matrix\n", .{});
                 return null;
@@ -111,6 +112,8 @@ pub fn Matrix(comptime T: type) type {
             }
         }
 
+        /// writes matrix numbers as continuous array without any other
+        /// inforamtion
         pub fn write(self: Self, writer: anytype) !void {
             if (self.height*self.width > self.ptr.len) {
                 return error.OutOfBound;
@@ -119,7 +122,7 @@ pub fn Matrix(comptime T: type) type {
             const size: usize = self.height*self.width*@sizeOf(T);
             _ = try writer.write(ptr[0..size]);
         }
-
+        /// reads a matrix as continuous array with length taken from matrix
         pub fn read(self: Self, reader: anytype) !void {
             if (self.height*self.width > self.ptr.len) {
                 return error.OutOfBound;
@@ -128,6 +131,52 @@ pub fn Matrix(comptime T: type) type {
             const size: usize = self.height*self.width*@sizeOf(T);
             const buffer: []u8 = ptr[0..size];
             _ = try reader.read(buffer);
+        }
+
+        pub fn initFromFile(allocator: std.mem.Allocator, file: std.fs.File) !Matrix(T) {
+            const reader = file.reader();
+
+            const typelen = reader.readInt(u32, .little) catch |e| {
+                std.log.err("Can't read typelen from a matrix file\n", .{});
+                return e;
+            };
+            if (typelen != @sizeOf(T)) {
+                std.log.err("matrix file contains a matrix of a different type\n", .{});
+                return error.DataConflict;
+            }
+            const width = reader.readInt(u32, .little) catch |e| {
+                std.log.err("Can't read width from a matrix file\n", .{});
+                return e;
+            };
+            const height = reader.readInt(u32, .little) catch |e| {
+                std.log.err("Can't read height from a matrix file\n", .{});
+                return e;
+            };
+
+            const mat = try Matrix(T).init(allocator, height, width);
+            try mat.read(reader);
+            return mat;
+        }
+
+        pub fn writeToFile(self: Matrix(T), file: std.fs.File) !void {
+            try file.seekTo(0);
+            const writer = file.writer();
+
+            writer.writeInt(u32, @sizeOf(T), .little) catch |e| {
+                std.log.err("Can't write typelen to an embending file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, @truncate(self.width), .little) catch |e| {
+                std.log.err("Can't write width to a matrix file\n", .{});
+                return e;
+            };
+            writer.writeInt(u32, @truncate(self.height), .little) catch |e| {
+                std.log.err("Can't write height to a matrix file\n", .{});
+                return e;
+            };
+
+            try self.write(writer);
+            try file.setEndPos(try file.getPos());
         }
 
         pub fn print(mat: Self) void {

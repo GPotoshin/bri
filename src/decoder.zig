@@ -459,7 +459,7 @@ pub const DecoderHeader = struct {
         };
     }
 
-    pub fn toDLHeader(self: Self) DecoderHeader{
+    pub fn toDLHeader(self: Self) DecodeLayerHeader {
         return .{
             .version = self.version,
             .type_len = self.type_len,

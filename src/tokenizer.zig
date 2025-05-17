@@ -297,9 +297,8 @@ pub fn Tokenizer() type {
 
         // the function takes a file (remplace for a reader?) and outputs a
         // list of token indices. The list is allocated with a given allocator
-        pub fn tokenize(self: *Self, allocator: std.mem.Allocator, file: std.fs.File) !std.ArrayList(u32) {
+        pub fn tokenize(self: *Self, allocator: std.mem.Allocator, reader: anytype) !std.ArrayList(u32) {
             const stdout = std.io.getStdOut().writer();
-            var reader = file.reader();
             var buffer: [128]u8 = undefined;
             var list = std.ArrayList(u32).init(allocator);
             var fbs = std.io.fixedBufferStream(buffer[1..]);

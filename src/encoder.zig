@@ -473,7 +473,7 @@ pub fn Encoder(comptime T: type) type {
             }
 
             for (self.layers) |layer| {
-                try layer.read.writeWeights(writer);
+                try layer.writer.writeWeights(writer);
             }
         }
 
