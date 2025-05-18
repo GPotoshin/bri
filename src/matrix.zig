@@ -80,7 +80,6 @@ pub fn Matrix(comptime T: type) type {
 
         pub inline fn row(self: Self, i: usize) []T {
             const start = i*self.width;
-            std.debug.print("start: {}\n", .{start});
             return self.ptr[start..start+self.width];
         }
 

@@ -57,6 +57,17 @@ We have a prototype of attention algorithm
 ### MHAttention
 We have a prototype of mhattention algorithm
 
+### Encoder
+We have a prototype of encoder algorithm
+
+### Decoder
+We have a prototype of decoder algorithm
+
+### Time
+
+* A singlethreaded version of code takes 3min to run 6G transformer.
+The goal is to have time down to subsecond
+
 ## Tests
 Most funcitons are covered by tests, so you can see how they work by looking at
 those examples.

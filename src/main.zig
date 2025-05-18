@@ -63,6 +63,12 @@ pub fn main() !void {
         const ctx_reader = ctx_stream.reader();
         const ctx_ids = try tokenizer.tokenize(allocator, ctx_reader);
 
+        var seq_stream = std.io.fixedBufferStream(payload.seq);
+        const seq_reader = seq_stream.reader();
+        const seq_ids = try tokenizer.tokenize(allocator, seq_reader);
+        
+        try tokenizer.writeToFile(tokens_file);
+
         const embedding_file = std.fs.cwd().openFile("data/embedding", .{.mode = .read_write}) catch |e| {
             std.debug.print("file 'data/embedding' is not found\n", .{});
             return e;
@@ -82,9 +88,7 @@ pub fn main() !void {
             std.debug.print("we cannot delete embeddings yet\n", .{});
             return;
         }
-
-        std.debug.print("tokens: {}, embeddings: {}", .{tokenizer.tokens.items.len, embedding.height});
-        std.debug.print("len: {}, prod: {}", .{embedding.ptr.len, embedding.width*tokenizer.tokens.items.len});
+        try embedding.writeToFile(embedding_file);
 
         const ctx_mat = try Matrix(f32).init(allocator, ctx_ids.items.len, embedding.width);
         for (0..ctx_ids.items.len) |i| {
@@ -93,20 +97,24 @@ pub fn main() !void {
             @import("position.zig").addPositionInformation(row, i, 10000); 
         }
 
-        var big_mhatt_header = e {
-            .version = 0,
-            .type_len = @sizeOf(T),
-            .heads = 4,
-            .seq_dim = 1024,
-            .ctx_dim = 1024,
-            .att_dim = 1024,
-            .mid_dim = 1024,
-            .out_dim = 1024,
-            .max_seq_len = 1024,
-            .max_ctx_len = 1024,
+        const seq_mat = try Matrix(f32).init(allocator, seq_ids.items.len, embedding.width);
+        for (0..seq_ids.items.len) |i| {
+            const row = seq_mat.row(i);
+            std.mem.copyBackwards(f32, row, embedding.row(seq_ids.items[i])); // we have a bug here
+            @import("position.zig").addPositionInformation(row, i, 10000); 
+        }
+
+        const transformer_file = std.fs.cwd().openFile("data/edtransformer_0.0.0", .{.mode = .read_write }) catch |e| {
+            std.debug.print("file 'data/edtransformer_0.0.0' is not found\n", .{});
+            return e;
         };
+        defer transformer_file.close();
+        var transformer = try EDTransformer(f32).initFromReader(allocator, transformer_file.reader(), embedding);
+        try transformer.compute(ctx_mat, seq_mat);
+        std.debug.print("height: {}, width: {}, seq_height: {}\n", .{transformer.out.height,
+            transformer.out.width, seq_mat.height});
 
-
+        try transformer.writeToFile(transformer_file);
         try embedding.writeToFile(embedding_file);
     }
     try tokenizer.writeToFile(tokens_file);

@@ -393,7 +393,6 @@ pub const EncoderHeader = struct {
         return .{
             .version = self.version,
             .type_len = self.type_len,
-            .layers = self.layers,
             .heads = self.heads,
             .ctx_dim = self.ctx_dim,
             .att_dim = self.att_dim,
@@ -407,21 +406,23 @@ pub const EncoderHeader = struct {
 pub fn Encoder(comptime T: type) type {
     return struct {
         header: EncoderHeader,
-        layers: ?[]EncodeLayer(T),
+        layers: []EncodeLayer(T),
 
         const Self = @This();
 
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.layers = try allocator.alloc(EncodeLayer(T), self.header.layers);
-            for (self.layers) |*layer| {
+            for (self.layers, 1..) |*layer, i| {
+                std.log.info("allocating encoder layer {}", .{i});
                 layer.header = self.header.toELHeader();
-                layer.allocateForHeader();
+                try layer.allocateForHeader(allocator);
             }
         }
 
         pub fn apply(self: Self, ctx: Matrix(T)) !void {
-            for (self.layers) |layer| {
-                layer.apply(ctx);
+            for (self.layers, 1..) |*layer, i| {
+                std.log.info("applying encoder layer {}", .{i});
+                try layer.apply(ctx);
             }
         }
 
@@ -473,7 +474,7 @@ pub fn Encoder(comptime T: type) type {
             }
 
             for (self.layers) |layer| {
-                try layer.writer.writeWeights(writer);
+                try layer.writeWeights(writer);
             }
         }
 
@@ -482,8 +483,8 @@ pub fn Encoder(comptime T: type) type {
                 return error.IncompatibleObjects;
             }
 
-            for (self.layers) |layer| {
-                try layer.read.readWeights(reader);
+            for (self.layers) |*layer| {
+                try layer.readWeights(reader);
             }
         }
     };

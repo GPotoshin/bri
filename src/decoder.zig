@@ -484,15 +484,17 @@ pub fn Decoder(comptime T: type) type {
 
         pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.layers = try allocator.alloc(DecodeLayer(T), self.header.layers);
-            for (self.layers) |*layer| {
+            for (self.layers, 1..) |*layer, i| {
+                std.log.info("allocating decoder layer {}", .{i});
                 layer.header = self.header.toDLHeader();
-                layer.allocateForHeader();
+                try layer.allocateForHeader(allocator);
             }
         }
 
         pub fn apply(self: Self, ctx: Matrix(T), seq: Matrix(T)) !void {
-            for (self.layers) |layer| {
-                layer.apply(ctx, seq);
+            for (self.layers, 1..) |*layer, i| {
+                std.log.info("applying decoder layer {}", .{i});
+                try layer.apply(ctx, seq);
             }
         }
 
@@ -544,7 +546,7 @@ pub fn Decoder(comptime T: type) type {
             }
 
             for (self.layers) |layer| {
-                try layer.read.writeWeights(writer);
+                try layer.writeWeights(writer);
             }
         }
 
@@ -553,8 +555,8 @@ pub fn Decoder(comptime T: type) type {
                 return error.IncompatibleObjects;
             }
 
-            for (self.layers) |layer| {
-                try layer.read.readWeights(reader);
+            for (self.layers) |*layer| {
+                try layer.readWeights(reader);
             }
         }
     };

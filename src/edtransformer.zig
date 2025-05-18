@@ -122,6 +122,7 @@ pub const EDHeader = struct {
         return .{
             .version = self.version,
             .type_len = self.type_len,
+            .layers = self.layers,
             .heads = self.heads,
             .ctx_dim = self.ctx_dim,
             .seq_dim = self.seq_dim,
@@ -137,6 +138,7 @@ pub const EDHeader = struct {
         return .{
             .version = self.version,
             .type_len = self.type_len,
+            .layers = self.layers,
             .heads = self.heads,
             .ctx_dim = self.ctx_dim,
             .att_dim = self.att_dim,
@@ -163,15 +165,15 @@ pub fn EDTransformer(comptime T: type) type {
         pub fn initFromReader(allocator: std.mem.Allocator, reader: anytype, embedding: Matrix(T)) !Self {
             var retval: Self = undefined;
             try retval.header.read(reader);
-            retval.header.tokens_count = embedding.height;
+            retval.header.tokens_count = @truncate(embedding.height);
             if (embedding.width != retval.header.seq_dim) {
                 std.log.err("embedding dimension should be the same as sequence dimention\n", .{});
                 return error.DataConflict;
             }
             // I've heard that embedding and unembedding can have the same configuration and it's quite logical
             retval.unembedding_matrix = embedding;
-            retval.allocateForHeader(allocator);
-            retval.readWeights(reader);
+            try retval.allocateForHeader(allocator);
+            try retval.readWeights(reader);
             return retval;
         }
 
@@ -183,7 +185,7 @@ pub fn EDTransformer(comptime T: type) type {
             try file.setEndPos(try file.getPos());
         }
 
-        pub fn allocateForHeader(self: Self, allocator: std.mem.Allocator) !void {
+        pub fn allocateForHeader(self: *Self, allocator: std.mem.Allocator) !void {
             self.encoder.header = self.header.toEHeader();
             self.decoder.header = self.header.toDHeader();
             try self.encoder.allocateForHeader(allocator);
@@ -197,21 +199,21 @@ pub fn EDTransformer(comptime T: type) type {
         }
 
         /// Attention! The content of ctx and seq is changed! Was it a good design choice?
-        pub fn compute(self: Self, ctx: Matrix(T), seq: Matrix(T)) !void {
-            self.encoder.apply(ctx);
-            self.decoder.apply(ctx, seq);
-            mtx.matprod(T, self.unembedding_matrix, self.seq, self.out);
-            mtx.softmax(T, self.seq);
+        pub fn compute(self: *Self, ctx: Matrix(T), seq: Matrix(T)) !void {
+            try self.encoder.apply(ctx);
+            try self.decoder.apply(ctx, seq);
+            try mtx.matprod(T, self.unembedding_matrix, seq, &self.out);
+            mtx.softmax(T, seq);
         }
 
         pub fn writeWeights(self: Self, writer: anytype) !void {
-            self.encoder.writeWeights(writer);
-            self.decoder.writeWeights(writer);
+            try self.encoder.writeWeights(writer);
+            try self.decoder.writeWeights(writer);
         }
 
-        pub fn readWeights(self: Self, reader: anytype) !void {
-            self.encoder.readWeights(reader);
-            self.decoder.readWeights(reader);
+        pub fn readWeights(self: *Self, reader: anytype) !void {
+            try self.encoder.readWeights(reader);
+            try self.decoder.readWeights(reader);
         }
     };
 }
